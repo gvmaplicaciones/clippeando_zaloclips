@@ -14,6 +14,9 @@ from src.config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MOMENTS_DIR
 PRICE_PER_MTOK_INPUT = 1.00
 PRICE_PER_MTOK_OUTPUT = 5.00
 
+MIN_CLIP_DURATION = 15.0
+MAX_CLIP_DURATION = 60.0
+
 SYSTEM_PROMPT = (
     "Sos un experto en clipping viral para TikTok con años de experiencia "
     "identificando los momentos de un video que mejor funcionan como clips "
@@ -35,8 +38,20 @@ clips virales de TikTok, evaluando estos criterios:
 - Cambios de tono marcados
 - Remates de historias con inicio y cierre claros
 
-Cada clip debe durar entre 15 y 60 segundos. Devolve TODOS los momentos que
-detectes con score >= 6 (en una escala de 1 a 10), sin limitar la cantidad.
+Reglas estrictas:
+- Cada clip debe durar EXACTAMENTE entre 15 y 60 segundos (end - start). Nunca
+  generes un clip mas corto que 15s ni mas largo que 60s: si un momento fuerte
+  dura mas de 60s, recorta el rango a la parte con mas potencial.
+- Los momentos no pueden solaparse entre si: el "start" de un momento debe ser
+  mayor o igual al "end" del momento anterior.
+- Usa TODO el rango de 1 a 10 con criterio real y honesto, no infles los
+  scores. La mayoria del contenido normal deberia puntuar entre 5 y 7. Reserva
+  8 para momentos muy buenos. Reserva 9-10 unicamente para 1 o 2 momentos
+  verdaderamente excepcionales de todo el video, con potencial viral claro.
+  Si todo te parece un 7-9, estas siendo demasiado generoso: se mas estricto.
+
+Devolve TODOS los momentos que detectes con score >= 6, sin limitar la
+cantidad.
 
 Devolve SOLO un array JSON con esta forma exacta, sin texto adicional:
 [
@@ -72,6 +87,33 @@ def _parse_moments(response_text: str) -> list[dict]:
     return json.loads(match.group(0))
 
 
+def _enforce_duration(moments: list[dict]) -> list[dict]:
+    """Descarta momentos mas cortos que el minimo y recorta los mas largos que el maximo."""
+    validated = []
+    for moment in moments:
+        duration = moment["end"] - moment["start"]
+        if duration < MIN_CLIP_DURATION:
+            continue
+        if duration > MAX_CLIP_DURATION:
+            moment = {**moment, "end": moment["start"] + MAX_CLIP_DURATION}
+        validated.append(moment)
+    return validated
+
+
+def _remove_overlaps(moments: list[dict]) -> list[dict]:
+    """Ordena por 'start' y, ante solapamientos, descarta el de menor score."""
+    ordered = sorted(moments, key=lambda m: m["start"])
+    result: list[dict] = []
+    for moment in ordered:
+        if result and moment["start"] < result[-1]["end"]:
+            if moment.get("score", 0) > result[-1].get("score", 0):
+                result[-1] = moment
+            # si no supera el score del momento ya aceptado, se descarta
+        else:
+            result.append(moment)
+    return result
+
+
 def find_moments(transcript_path: Path, output_dir: Path | None = None) -> tuple[Path, list[dict], anthropic.types.Usage]:
     """Analiza un transcript JSON y guarda los momentos detectados como JSON."""
     transcript_path = Path(transcript_path)
@@ -99,6 +141,8 @@ def find_moments(transcript_path: Path, output_dir: Path | None = None) -> tuple
     ).strip()
 
     moments = _parse_moments(response_text)
+    moments = _enforce_duration(moments)
+    moments = _remove_overlaps(moments)
 
     output_path = target_dir / f"{transcript_path.stem}.json"
     output_path.write_text(json.dumps(moments, ensure_ascii=False, indent=2), encoding="utf-8")
