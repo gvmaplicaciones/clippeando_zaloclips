@@ -18,7 +18,7 @@ def run_pipeline(url: str | None = None, file: str | None = None) -> list[Path]:
     video_path, audio_path = ingest(url=url, file=file)
 
     transcript_path = transcribe_video(audio_path)
-    moments_path = detect_moments(transcript_path)
+    moments_path, _moments, _usage = detect_moments(transcript_path)
     clip_paths = cut_clips(video_path, moments_path)
 
     print(f"Video: {video_path}")

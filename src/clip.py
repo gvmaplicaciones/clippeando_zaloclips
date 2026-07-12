@@ -16,13 +16,13 @@ def cut_clips(video_path: Path, moments_path: Path, output_dir: Path | None = No
     target_dir = output_dir or OUTPUT_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    moments = json.loads(moments_path.read_text(encoding="utf-8"))["moments"]
+    moments = json.loads(moments_path.read_text(encoding="utf-8"))
 
     clip_paths = []
     for i, moment in enumerate(moments, start=1):
         start = moment["start"]
         duration = moment["end"] - moment["start"]
-        title = moment.get("title", f"clip_{i}")
+        title = moment.get("hook_title", f"clip_{i}")
         safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in title).strip()
         output_path = target_dir / f"{video_path.stem}_{i:02d}_{safe_title}.mp4"
 

@@ -29,7 +29,7 @@ MOMENTS_DIR = _resolve_dir("MOMENTS_DIR", PROJECT_ROOT / "moments")
 OUTPUT_DIR = _resolve_dir("OUTPUT_DIR", PROJECT_ROOT / "output")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
 
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "medium")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "auto")
