@@ -28,14 +28,19 @@ def _get_model() -> WhisperModel:
     return _model
 
 
-def transcribe_video(video_path: Path, output_dir: Path | None = None) -> Path:
-    """Transcribe un archivo de video/audio y guarda el resultado como JSON."""
-    video_path = Path(video_path)
+def transcribe_video(audio_path: Path, output_dir: Path | None = None) -> Path:
+    """Transcribe un archivo de audio/video y guarda el resultado como JSON.
+
+    Acepta tanto el .wav extraido por ``src.download.extract_audio`` como
+    cualquier archivo de video, ya que faster-whisper decodifica el audio
+    internamente con ffmpeg sin importar el formato de entrada.
+    """
+    audio_path = Path(audio_path)
     target_dir = output_dir or TRANSCRIPTS_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
 
     model = _get_model()
-    segments_iter, info = model.transcribe(str(video_path), language=WHISPER_LANGUAGE)
+    segments_iter, info = model.transcribe(str(audio_path), language=WHISPER_LANGUAGE)
 
     segments = [
         {"start": seg.start, "end": seg.end, "text": seg.text.strip()}
@@ -43,12 +48,12 @@ def transcribe_video(video_path: Path, output_dir: Path | None = None) -> Path:
     ]
 
     transcript = {
-        "source": video_path.name,
+        "source": audio_path.name,
         "language": info.language,
         "duration": info.duration,
         "segments": segments,
     }
 
-    output_path = target_dir / f"{video_path.stem}.json"
+    output_path = target_dir / f"{audio_path.stem}.json"
     output_path.write_text(json.dumps(transcript, ensure_ascii=False, indent=2), encoding="utf-8")
     return output_path
