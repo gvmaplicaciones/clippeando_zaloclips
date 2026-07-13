@@ -96,6 +96,28 @@ def run_command(args: list[str], progress_interval: float = 3.0) -> None:
         raise RuntimeError(f"ffmpeg fallo (codigo {proc.returncode})")
 
 
+def probe_duration(path: Path | str) -> float | None:
+    """Duracion en segundos de un archivo de audio/video via ffprobe, o None si falla."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return None
+
+
 def escape_filter_path(path: Path | str) -> str:
     """Escapa una ruta para usarla como valor de un filtro de ffmpeg (ass,
     subtitles, drawtext fontfile, etc.).

@@ -17,10 +17,19 @@ from PIL import Image
 
 from src.config import PROJECT_ROOT
 from src.ffmpeg_utils import escape_filter_path
+from src.ffmpeg_utils import probe_duration
 from src.ffmpeg_utils import run_command as run_ffmpeg_command
 
 WATERMARK_TEXT = "ampeterby7"
 DEFAULT_LOGO_PATH = PROJECT_ROOT / "Youtube_logo.png"
+
+# Los clips finales del pipeline duran como mucho unos pocos minutos
+# (src.clip.MAX_CLIP_DURATION = 180s antes de dividir en partes). Si el
+# .mp4 de entrada dura mucho mas que eso, casi seguro es el VOD original
+# mezclado por error en la carpeta (--folder apuntando mal, o el archivo
+# fuente copiado ahi) y no un clip ya cortado - mejor cortar la ejecucion
+# ahi que quemar horas de CPU procesando el video equivocado.
+MAX_EXPECTED_CLIP_SECONDS = 10 * 60
 
 # Alto fijo del logo en pixeles (los clips del pipeline son siempre 1080x1920,
 # asi que un valor fijo en vez de una fraccion de la resolucion es mas facil
@@ -116,7 +125,13 @@ def _build_filter_complex(
 
     logo_x = f"W-w-({MARGIN_RIGHT_FRACTION}*W)"
     logo_y = f"H-h-({MARGIN_BOTTOM_FRACTION}*H)"
-    overlay_filter = f"[0:v][logo]overlay=x='{logo_x}':y='{logo_y}'[with_logo]"
+    # shortest=1: sin esto, el overlay filter por default (eof_action=repeat)
+    # sigue generando frames indefinidamente una vez que el input principal
+    # termina, porque el logo (input en loop) nunca llega a EOF por si solo -
+    # verificado empiricamente: sin este flag, un clip de 5s sin pista de
+    # audio se cuelga corriendo ffmpeg mas alla de su duracion real (el
+    # global -shortest de la salida no alcanza a cortarlo).
+    overlay_filter = f"[0:v][logo]overlay=x='{logo_x}':y='{logo_y}':shortest=1[with_logo]"
 
     # Mismas formulas que logo_x/logo_y pero evaluadas con w/h (dimensiones
     # del frame en drawtext) y con logo_w/logo_h ya conocidos en Python, para
@@ -176,6 +191,16 @@ def add_watermark(
             f"No se encontro el logo en {logo_path}. Pasa --logo-file para usar otra ruta."
         )
 
+    input_duration = probe_duration(clip_path)
+    duration_desc = f"{input_duration:.1f}s" if input_duration is not None else "desconocida (fallo ffprobe)"
+    print(f"  Clip de entrada: {clip_path} (duracion detectada: {duration_desc})", flush=True)
+    if input_duration is not None and input_duration > MAX_EXPECTED_CLIP_SECONDS:
+        raise RuntimeError(
+            f"{clip_path} dura {input_duration / 60:.1f} minutos - esto no parece un clip corto "
+            "ya cortado, sino probablemente el video original/fuente mezclado por error en la "
+            "carpeta. Revisa que --folder apunte solo a la carpeta de clips finales."
+        )
+
     output_path = Path(output_path) if output_path else clip_path.with_name(
         f"{clip_path.stem}_wm{clip_path.suffix}"
     )
@@ -202,8 +227,13 @@ def add_watermark(
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "copy",
         "-shortest",
-        str(render_path),
     ]
+    if input_duration is not None:
+        # Tope explicito ademas de -shortest y overlay=shortest=1: no confiar
+        # en un solo mecanismo para cortar la duracion (ver comentario en
+        # overlay_filter sobre el bug de eof_action=repeat).
+        args += ["-t", f"{input_duration:.3f}"]
+    args.append(str(render_path))
     run_ffmpeg_command(args)
 
     if overwriting_in_place:
