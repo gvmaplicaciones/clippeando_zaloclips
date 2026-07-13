@@ -7,11 +7,17 @@ from pathlib import Path
 import ffmpeg
 import yt_dlp
 
-from src.config import INPUT_DIR
+from src.config import INPUT_DIR, YTDLP_COOKIES_FILE, YTDLP_COOKIES_FROM_BROWSER
 
 
 def download_vod(url: str, output_dir: Path | None = None) -> Path:
-    """Descarga un video desde una URL y devuelve la ruta local del archivo."""
+    """Descarga un video desde una URL y devuelve la ruta local del archivo.
+
+    Si YouTube (u otro sitio) pide confirmar que no sos un bot, configura
+    YTDLP_COOKIES_FILE (ruta a un cookies.txt exportado del navegador) o
+    YTDLP_COOKIES_FROM_BROWSER (solo en una maquina con navegador local) en
+    el .env. Ver README para instrucciones de como exportar el cookies.txt.
+    """
     target_dir = output_dir or INPUT_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -21,6 +27,11 @@ def download_vod(url: str, output_dir: Path | None = None) -> Path:
         "merge_output_format": "mp4",
         "noplaylist": True,
     }
+
+    if YTDLP_COOKIES_FILE:
+        ydl_opts["cookiefile"] = YTDLP_COOKIES_FILE
+    if YTDLP_COOKIES_FROM_BROWSER:
+        ydl_opts["cookiesfrombrowser"] = (YTDLP_COOKIES_FROM_BROWSER,)
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)

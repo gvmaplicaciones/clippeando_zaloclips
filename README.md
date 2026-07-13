@@ -60,12 +60,14 @@ Todo se configura mediante variables de entorno (ver `.env.example`):
 | Variable | Default | Descripción |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | *(requerida)* | API key de Anthropic |
-| `ANTHROPIC_MODEL` | `claude-sonnet-5` | Modelo usado para detectar momentos |
+| `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Modelo usado para detectar momentos |
 | `PROJECT_ROOT` | raíz del repo | Raíz para resolver `input/`, `transcripts/`, etc. |
 | `INPUT_DIR`, `TRANSCRIPTS_DIR`, `MOMENTS_DIR`, `OUTPUT_DIR` | subcarpetas de `PROJECT_ROOT` | Override individual de cada carpeta |
 | `WHISPER_MODEL_SIZE` | `medium` | Tamaño del modelo de faster-whisper |
 | `WHISPER_DEVICE` | `auto` | `cpu`, `cuda` o `auto` |
 | `WHISPER_LANGUAGE` | *(autodetección)* | Forzar idioma de transcripción |
+| `YTDLP_COOKIES_FILE` | *(ninguno)* | Ruta a un `cookies.txt` para autenticar la descarga (ver abajo) |
+| `YTDLP_COOKIES_FROM_BROWSER` | *(ninguno)* | Nombre del navegador (`chrome`, `firefox`, ...) para leer cookies localmente. No funciona en Colab. |
 
 ## Google Colab
 
@@ -73,3 +75,28 @@ Abrí `notebooks/pipeline_colab.ipynb` en Colab. El notebook clona (o
 actualiza) este repo, instala dependencias, verifica ffmpeg, pide la API
 key de forma segura (no queda hardcodeada en el notebook) y corre
 `run_pipeline` de ejemplo.
+
+## Problemas conocidos
+
+### `ERROR: [youtube] ...: Sign in to confirm you're not a bot`
+
+YouTube bloquea la descarga cuando la IP no parece un navegador real (muy
+común en Colab, VPS y otros entornos cloud). yt-dlp soluciona esto
+autenticando con cookies de una sesión de YouTube ya logueada:
+
+1. En tu navegador (logueado en YouTube), exportá las cookies con una
+   extensión como "Get cookies.txt LOCALLY" (Chrome/Firefox) en formato
+   Netscape (`cookies.txt`).
+2. Subí ese archivo a tu entorno (en Colab: panel de archivos, o
+   `files.upload()`).
+3. Configurá `YTDLP_COOKIES_FILE=/ruta/a/cookies.txt` en tu `.env` (o
+   `os.environ["YTDLP_COOKIES_FILE"] = "..."` antes de llamar a
+   `run_pipeline` en el notebook).
+
+En una máquina local o VPS donde el navegador está instalado, alternativamente
+podés usar `YTDLP_COOKIES_FROM_BROWSER=chrome` para que yt-dlp lea las cookies
+directamente del navegador (esto no funciona en Colab, que no tiene un
+navegador con sesión iniciada).
+
+Las cookies de YouTube expiran; si el error reaparece después de un tiempo,
+volvé a exportarlas.
