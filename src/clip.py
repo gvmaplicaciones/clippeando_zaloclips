@@ -21,6 +21,8 @@ from src.download import get_video_title
 from src.naming import sanitize_filename
 from src.subtitles import build_ass, burn_subtitles, flatten_words, segments_in_range, words_in_range
 from src.vertical import crop_to_vertical
+from src.watermark import add_watermark
+from src.watermarks import get_watermark, list_watermarks
 
 SPLIT_THRESHOLD = 90.0
 PART_MIN_DURATION = 60.0
@@ -112,6 +114,7 @@ def cut_clips(
     moments_path: Path,
     transcript_path: Path | None = None,
     output_dir: Path | None = None,
+    watermark: str | None = None,
 ) -> list[Path]:
     """Genera los clips finales a partir de los momentos detectados.
 
@@ -122,11 +125,19 @@ def cut_clips(
 
     Pipeline por cada parte: recorte + crop vertical 9:16 en una sola pasada
     (para que el corte quede en el frame exacto) -> quemado de subtitulos
-    karaoke (+ titulo inicial y cliffhanger si aplica).
+    karaoke (+ titulo inicial y cliffhanger si aplica) -> si se paso
+    `watermark` (nombre de una marca de src.watermarks.WATERMARKS), se
+    aplica sobre el archivo final ya en esta misma corrida, sin necesidad
+    de correr src.watermark aparte despues.
     """
     video_path = Path(video_path)
     moments_path = Path(moments_path)
     base_dir = output_dir or OUTPUT_DIR
+
+    # Resolver la marca de agua ANTES de generar nada: si el nombre no
+    # existe, mejor fallar de una con un mensaje claro que despues de
+    # procesar todos los clips.
+    wm_config = get_watermark(watermark) if watermark else None
 
     video_title = sanitize_filename(get_video_title(video_path))
     target_dir = base_dir / video_title
@@ -183,6 +194,14 @@ def cut_clips(
                 )
                 burn_subtitles(vertical_path, ass_content, ass_path, final_path)
 
+                if wm_config is not None:
+                    add_watermark(
+                        final_path,
+                        output_path=final_path,
+                        text=wm_config["text"],
+                        logo_path=Path(wm_config["logo"]),
+                    )
+
                 clip_paths.append(final_path)
 
     return clip_paths
@@ -193,20 +212,41 @@ def main() -> None:
         description="Regenera los clips finales a partir de un video, sus momentos y "
         "(opcionalmente) su transcript ya existentes, sin re-descargar ni re-transcribir."
     )
-    parser.add_argument("--video", required=True, help="Ruta al video original (ej. input/xxx.mp4)")
-    parser.add_argument("--moments", required=True, help="Ruta al JSON de momentos (moments/xxx.json)")
+    parser.add_argument("--video", help="Ruta al video original (ej. input/xxx.mp4)")
+    parser.add_argument("--moments", help="Ruta al JSON de momentos (moments/xxx.json)")
     parser.add_argument(
         "--transcript",
         help="Ruta al transcript JSON (transcripts/xxx.json). Habilita subtitulos karaoke "
         "y el ajuste de cortes a limite de palabra si tiene timestamps por palabra.",
     )
+    parser.add_argument(
+        "--watermark",
+        help="Nombre de una marca de src.watermarks.WATERMARKS a aplicar sobre cada clip "
+        "final en la misma corrida (ver --list-watermarks). Sin esto, los clips salen sin marca.",
+    )
+    parser.add_argument(
+        "--list-watermarks",
+        action="store_true",
+        help="Lista las marcas de agua disponibles y termina, sin generar clips.",
+    )
     args = parser.parse_args()
 
-    clip_paths = cut_clips(
-        Path(args.video),
-        Path(args.moments),
-        transcript_path=Path(args.transcript) if args.transcript else None,
-    )
+    if args.list_watermarks:
+        list_watermarks()
+        return
+
+    if not args.video or not args.moments:
+        parser.error("--video y --moments son requeridos (salvo con --list-watermarks)")
+
+    try:
+        clip_paths = cut_clips(
+            Path(args.video),
+            Path(args.moments),
+            transcript_path=Path(args.transcript) if args.transcript else None,
+            watermark=args.watermark,
+        )
+    except ValueError as e:
+        parser.error(str(e))
 
     parts = sum(1 for p in clip_paths if " PARTE " in p.stem)
     print(f"Clips generados ({len(clip_paths)}), de los cuales {parts} son partes de momentos largos:")

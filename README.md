@@ -26,7 +26,8 @@ clip-pipeline/
     vertical.py    # crop centrado a 9:16 (1080x1920)
     subtitles.py   # genera y quema el .ass de subtitulos karaoke
     naming.py      # sanitiza nombres de archivo/carpeta para que sean validos en Windows
-    watermark.py   # script independiente: quema el logo + texto sobre clips ya generados
+    watermark.py   # quema el logo + texto sobre un clip (funcion compartida + script independiente)
+    watermarks.py  # registro de marcas de agua conocidas por nombre (texto + logo)
   notebooks/
     pipeline_colab.ipynb   # notebook para correr todo en Google Colab
   requirements.txt
@@ -54,6 +55,9 @@ python -m src.pipeline --url "https://..."
 
 # a partir de un archivo ya descargado en input/
 python -m src.pipeline --file input/mi_video.mp4
+
+# aplicando una marca de agua (ver "Marca de agua" mas abajo) en la misma corrida
+python -m src.pipeline --url "https://..." --watermark ampeter
 ```
 
 Esto genera:
@@ -89,7 +93,8 @@ actualizar `src/clip.py`), podés regenerar solo los clips finales:
 python -m src.clip \
   --video input/<video>.mp4 \
   --moments moments/<video>.json \
-  --transcript transcripts/<video>.json
+  --transcript transcripts/<video>.json \
+  --watermark ampeter   # opcional, ver "Marca de agua" mas abajo
 ```
 
 `--transcript` es opcional: sin él se sigue aplicando el crop vertical y la
@@ -110,23 +115,48 @@ python -m src.download --url "https://www.youtube.com/watch?v=<id>" --metadata-o
 Esto solo pide el título a yt-dlp (no descarga video ni audio) y lo guarda
 en `metadata/<id>.json`, listo para que `src.clip` lo use la próxima vez.
 
-### Watermark sobre clips ya generados
+### Marca de agua
 
-`src/watermark.py` es un script aparte del pipeline: no reprocesa nada
-desde el video original, solo quema un watermark pequeño y permanente en
-la esquina inferior derecha de clips `.mp4` que ya existen, con margen
-respecto al borde para no chocar con la UI de TikTok. El watermark
-combina dos elementos, presentes de forma estática durante el 100% de la
-duración del clip (sin animación):
+El watermark combina dos elementos, presentes de forma estática durante
+el 100% de la duración del clip (sin animación), en la esquina inferior
+derecha con margen respecto al borde para no chocar con la UI de TikTok:
 
-- El logo de YouTube (`Youtube_logo.png` en la raíz del repo por
-  defecto), escalado a ~50px de alto manteniendo su proporción original,
-  superpuesto limpio gracias a su canal alpha (sin caja de fondo).
-- El texto `"ampeterby7"` (con contorno y sombra para leerse sobre
-  cualquier fondo) inmediatamente a la izquierda del logo, centrado
-  verticalmente con él.
+- Un logo (PNG con transparencia), escalado a ~50px de alto manteniendo
+  su proporción original.
+- Un texto (con contorno y sombra para leerse sobre cualquier fondo)
+  inmediatamente a la izquierda del logo, centrado verticalmente con él.
 
-Corre en batch sobre toda una carpeta:
+La lógica de quemado vive en una sola función (`add_watermark()` en
+`src/watermark.py`) usada por dos caminos distintos, según cuándo la
+necesites:
+
+**1. En la misma corrida que genera los clips** (`src/clip.py` /
+`src/pipeline.py`), con `--watermark <nombre>`: cada clip final se marca
+apenas se termina de generar (vertical + subtítulos + marca, todo en un
+solo paso), sin producir primero una versión limpia:
+
+```bash
+python -m src.clip --video ... --moments ... --transcript ... --watermark ampeter
+python -m src.pipeline --url "..." --watermark ampeter
+```
+
+Sin `--watermark`, el comportamiento es el de siempre: clips sin marca,
+sin preguntar nada. `--list-watermarks` (en ambos comandos) imprime las
+marcas disponibles sin generar nada:
+
+```bash
+python -m src.clip --list-watermarks
+```
+
+Las marcas se definen en `src/watermarks.py` (diccionario `WATERMARKS`,
+nombre -> `{"text": ..., "logo": ...}`); agregar una marca nueva para otra
+campaña es agregar una entrada ahí, sin tocar el resto del código. Un
+nombre de marca que no existe falla con un mensaje claro listando las
+marcas válidas, antes de generar ningún clip.
+
+**2. Sobre clips ya generados, sin regenerar nada** (`src/watermark.py`
+como script aparte): útil si ya tenés una carpeta de clips limpios y
+querés marcarlos después. Corre en batch sobre toda una carpeta:
 
 ```bash
 python -m src.watermark --folder "output/<título del video>"
