@@ -10,6 +10,7 @@ import yt_dlp
 from dotenv import load_dotenv
 
 from src.config import INPUT_DIR
+from src.ffmpeg_utils import run as run_ffmpeg
 
 # Clientes de YouTube que si respetan las cookies de sesion. Los clientes
 # moviles (android, ios, android_vr, etc.) ignoran la autenticacion por
@@ -91,13 +92,13 @@ def extract_audio(video_path: Path, output_dir: Path | None = None) -> Path:
 
     audio_path = target_dir / f"{video_path.stem}.wav"
 
-    (
+    stream = (
         ffmpeg
         .input(str(video_path))
         .output(str(audio_path), ac=1, ar=16000, acodec="pcm_s16le")
         .overwrite_output()
-        .run(quiet=True)
     )
+    run_ffmpeg(stream)
 
     return audio_path
 

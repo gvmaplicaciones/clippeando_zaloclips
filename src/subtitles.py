@@ -11,6 +11,7 @@ from pathlib import Path
 
 import ffmpeg
 
+from src.ffmpeg_utils import run as run_ffmpeg
 from src.vertical import VERTICAL_HEIGHT, VERTICAL_WIDTH
 
 FONT_NAME = "DejaVu Sans"
@@ -160,6 +161,35 @@ def build_ass(
     return _ASS_HEADER + "\n".join(events) + "\n"
 
 
+def _escape_ffmpeg_filter_path(path: Path) -> str:
+    """Escapa una ruta para usarla como valor del filtro ``ass``/``subtitles``.
+
+    Dentro del mini-lenguaje de filtros de ffmpeg, ':' separa opciones y
+    '\\' es caracter de escape, asi que una ruta de Windows como
+    ``C:\\Users\\x\\clip.ass`` rompe el parseo si se pasa tal cual.
+
+    Verificado empiricamente contra ffmpeg real (no solo por doc): ni pasar
+    la ruta como primer valor posicional con ':' escapado (``ass=C\\:/...``)
+    ni envolverla en comillas simples sin escapar el ':' funcionan - ffmpeg
+    sigue partiendo el string en el ':' y trata el resto como si fuera la
+    siguiente opcion del filtro (``original_size``), fallando con "Unable to
+    parse option value ... as image size". Lo unico que funciono fue usar la
+    clave explicita ``filename=`` con el valor entre comillas simples Y el
+    ':' escapado adentro: ``ass=filename='C\\:/Users/.../clip.ass'``.
+
+    Se arma como el valor crudo de la opcion ``-vf`` (ver ``burn_subtitles``)
+    en vez de via ``.filter()`` de ffmpeg-python: ese metodo aplica su propio
+    escapado automatico pensado para grafos de filtros, y al recibir una
+    ruta que ya tiene backslashes termina multiplicandolos (`C:\\...` ->
+    `C\\\\\\\\\\\\:\\\\...`), generando una ruta corrupta que libass no
+    puede abrir.
+    """
+    escaped = str(path).replace("\\", "/")
+    escaped = escaped.replace("'", "'\\''")  # por si la ruta tuviera comillas simples
+    escaped = escaped.replace(":", "\\:")
+    return f"filename='{escaped}'"
+
+
 def burn_subtitles(input_path: Path, ass_content: str, output_path: Path) -> Path:
     """Escribe `ass_content` a disco y quema los subtitulos sobre input_path."""
     input_path = Path(input_path)
@@ -169,16 +199,17 @@ def burn_subtitles(input_path: Path, ass_content: str, output_path: Path) -> Pat
     ass_path = output_path.with_suffix(".ass")
     ass_path.write_text(ass_content, encoding="utf-8")
 
-    (
+    vf = f"ass={_escape_ffmpeg_filter_path(ass_path)}"
+    stream = (
         ffmpeg
         .input(str(input_path))
-        .filter("ass", str(ass_path))
         .output(
             str(output_path),
+            vf=vf,
             **{"c:v": "libx264", "preset": "veryfast", "crf": 20, "pix_fmt": "yuv420p", "c:a": "copy"},
         )
         .overwrite_output()
-        .run(quiet=True)
     )
+    run_ffmpeg(stream)
 
     return output_path

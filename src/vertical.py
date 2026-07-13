@@ -5,6 +5,8 @@ from pathlib import Path
 
 import ffmpeg
 
+from src.ffmpeg_utils import run as run_ffmpeg
+
 VERTICAL_WIDTH = 1080
 VERTICAL_HEIGHT = 1920
 
@@ -51,7 +53,7 @@ def crop_to_vertical(
     if duration is not None:
         output_kwargs["t"] = duration
 
-    (
+    stream = (
         ffmpeg
         .input(str(input_path), **input_kwargs)
         .filter("crop", crop_w, crop_h)
@@ -59,7 +61,7 @@ def crop_to_vertical(
         .filter("setsar", 1)
         .output(str(output_path), **output_kwargs)
         .overwrite_output()
-        .run(quiet=True)
     )
+    run_ffmpeg(stream)
 
     return output_path
