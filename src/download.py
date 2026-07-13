@@ -2,12 +2,56 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import ffmpeg
 import yt_dlp
+from dotenv import load_dotenv
 
-from src.config import INPUT_DIR, YTDLP_COOKIES_FILE, YTDLP_COOKIES_FROM_BROWSER
+from src.config import INPUT_DIR
+
+# Clientes de YouTube que si respetan las cookies de sesion. Los clientes
+# moviles (android, ios, android_vr, etc.) ignoran la autenticacion por
+# cookies aunque esten bien configuradas, y son los que suelen disparar el
+# "Sign in to confirm you're not a bot" incluso con un cookies.txt valido.
+_COOKIE_AWARE_PLAYER_CLIENTS = ["web", "web_creator", "tv"]
+
+
+def _cookie_ydl_opts() -> dict:
+    """Arma las opciones de autenticacion de yt-dlp leyendo el entorno en el
+    momento de la llamada (no al importar el modulo).
+
+    Esto evita un problema tipico en notebooks (Colab): si src.download ya
+    se importo antes de configurar las cookies, una constante leida solo al
+    importar quedaria congelada en None aunque despues se actualice el .env
+    o os.environ, y habria que reiniciar el runtime para que tome efecto.
+    Volver a llamar a load_dotenv() y leer os.getenv() en cada descarga
+    evita ese problema.
+    """
+    load_dotenv(override=True)
+
+    cookies_file = os.getenv("YTDLP_COOKIES_FILE") or None
+    cookies_from_browser = os.getenv("YTDLP_COOKIES_FROM_BROWSER") or None
+    player_client_env = os.getenv("YTDLP_PLAYER_CLIENT") or None
+
+    opts: dict = {}
+    if cookies_file:
+        opts["cookiefile"] = cookies_file
+    if cookies_from_browser:
+        opts["cookiesfrombrowser"] = (cookies_from_browser,)
+
+    if player_client_env:
+        player_clients = [c.strip() for c in player_client_env.split(",") if c.strip()]
+    elif cookies_file or cookies_from_browser:
+        player_clients = _COOKIE_AWARE_PLAYER_CLIENTS
+    else:
+        player_clients = None
+
+    if player_clients:
+        opts["extractor_args"] = {"youtube": {"player_client": player_clients}}
+
+    return opts
 
 
 def download_vod(url: str, output_dir: Path | None = None) -> Path:
@@ -27,11 +71,7 @@ def download_vod(url: str, output_dir: Path | None = None) -> Path:
         "merge_output_format": "mp4",
         "noplaylist": True,
     }
-
-    if YTDLP_COOKIES_FILE:
-        ydl_opts["cookiefile"] = YTDLP_COOKIES_FILE
-    if YTDLP_COOKIES_FROM_BROWSER:
-        ydl_opts["cookiesfrombrowser"] = (YTDLP_COOKIES_FROM_BROWSER,)
+    ydl_opts.update(_cookie_ydl_opts())
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)

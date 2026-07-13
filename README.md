@@ -68,6 +68,7 @@ Todo se configura mediante variables de entorno (ver `.env.example`):
 | `WHISPER_LANGUAGE` | *(autodetección)* | Forzar idioma de transcripción |
 | `YTDLP_COOKIES_FILE` | *(ninguno)* | Ruta a un `cookies.txt` para autenticar la descarga (ver abajo) |
 | `YTDLP_COOKIES_FROM_BROWSER` | *(ninguno)* | Nombre del navegador (`chrome`, `firefox`, ...) para leer cookies localmente. No funciona en Colab. |
+| `YTDLP_PLAYER_CLIENT` | `web,web_creator,tv` si hay cookies configuradas | Clientes de YouTube a usar, separados por coma. Los clientes moviles (`android`, `ios`, `android_vr`) ignoran las cookies de sesion. |
 
 ## Google Colab
 
@@ -81,22 +82,38 @@ key de forma segura (no queda hardcodeada en el notebook) y corre
 ### `ERROR: [youtube] ...: Sign in to confirm you're not a bot`
 
 YouTube bloquea la descarga cuando la IP no parece un navegador real (muy
-común en Colab, VPS y otros entornos cloud). yt-dlp soluciona esto
-autenticando con cookies de una sesión de YouTube ya logueada:
+común en Colab, VPS y otros entornos cloud). Hay dos causas independientes,
+y normalmente hace falta resolver ambas:
+
+**1. Cookies de sesión.** yt-dlp puede autenticarse con las cookies de una
+sesión de YouTube ya logueada:
 
 1. En tu navegador (logueado en YouTube), exportá las cookies con una
    extensión como "Get cookies.txt LOCALLY" (Chrome/Firefox) en formato
    Netscape (`cookies.txt`).
 2. Subí ese archivo a tu entorno (en Colab: panel de archivos, o
    `files.upload()`).
-3. Configurá `YTDLP_COOKIES_FILE=/ruta/a/cookies.txt` en tu `.env` (o
-   `os.environ["YTDLP_COOKIES_FILE"] = "..."` antes de llamar a
-   `run_pipeline` en el notebook).
+3. Configurá `YTDLP_COOKIES_FILE=/ruta/a/cookies.txt` en tu `.env` (en el
+   notebook de Colab, la sección "Autenticar la descarga" hace esto por
+   vos). `src/download.py` relee el `.env` en cada descarga, así que no
+   hace falta reiniciar el kernel para que tome efecto.
 
 En una máquina local o VPS donde el navegador está instalado, alternativamente
 podés usar `YTDLP_COOKIES_FROM_BROWSER=chrome` para que yt-dlp lea las cookies
 directamente del navegador (esto no funciona en Colab, que no tiene un
 navegador con sesión iniciada).
+
+**2. Cliente de YouTube usado por yt-dlp.** Aunque las cookies sean válidas,
+si yt-dlp termina probando un cliente móvil (`android`, `ios`, `android_vr` —
+se ve en el log como "Downloading android vr player API JSON") el bot-check
+va a fallar igual, porque esos clientes no usan cookies de sesión. Cuando
+hay cookies configuradas, el pipeline fuerza automáticamente clientes que sí
+las respetan (`web`, `web_creator`, `tv`); podés override-earlo con
+`YTDLP_PLAYER_CLIENT=web,tv` (lista separada por comas) si hace falta ajustar.
+
+También instalá **deno** (el notebook de Colab lo hace en la sección 4) —
+yt-dlp lo necesita para resolver los desafíos anti-bot de YouTube; sin un
+runtime de JS, la extracción puede degradar a esos mismos clientes móviles.
 
 Las cookies de YouTube expiran; si el error reaparece después de un tiempo,
 volvé a exportarlas.

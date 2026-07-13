@@ -36,10 +36,7 @@ WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "auto")
 WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "auto")
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE") or None
 
-# YouTube (u otros sitios) puede exigir login para confirmar que no sos un bot,
-# sobre todo desde IPs de datacenter (Colab, VPS). yt-dlp soporta autenticarse
-# via cookies exportadas del navegador. YTDLP_COOKIES_FILE apunta a un
-# cookies.txt (formato Netscape); YTDLP_COOKIES_FROM_BROWSER solo funciona en
-# una maquina con el navegador instalado (no sirve en Colab).
-YTDLP_COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE") or None
-YTDLP_COOKIES_FROM_BROWSER = os.getenv("YTDLP_COOKIES_FROM_BROWSER") or None
+# Nota: YTDLP_COOKIES_FILE, YTDLP_COOKIES_FROM_BROWSER y YTDLP_PLAYER_CLIENT
+# (ver README) se leen directamente en src/download.py en el momento de cada
+# descarga, no aca, para que un .env actualizado despues de importar el
+# modulo (comun en notebooks de Colab) tenga efecto sin reiniciar el runtime.
