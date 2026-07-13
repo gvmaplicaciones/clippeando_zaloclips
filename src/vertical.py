@@ -5,6 +5,7 @@ from pathlib import Path
 
 import ffmpeg
 
+from src.ffmpeg_utils import has_audio_stream
 from src.ffmpeg_utils import run as run_ffmpeg
 
 VERTICAL_WIDTH = 1080
@@ -53,15 +54,28 @@ def crop_to_vertical(
     if duration is not None:
         output_kwargs["t"] = duration
 
-    stream = (
-        ffmpeg
-        .input(str(input_path), **input_kwargs)
+    input_stream = ffmpeg.input(str(input_path), **input_kwargs)
+    # Encadenar .filter() directo sobre el input (en vez de sobre
+    # input_stream.video) genera un unico stream de salida filtrado y ese es
+    # el unico que ffmpeg-python mapea en el output: el audio original queda
+    # afuera del comando por completo (ni siquiera hay que descartarlo, un
+    # -map explicito lo excluye por default). Hay que tomar el audio del
+    # input aparte y pasarlo tambien a .output() para que se mapee.
+    video = (
+        input_stream.video
         .filter("crop", crop_w, crop_h)
         .filter("scale", width, height)
         .filter("setsar", 1)
-        .output(str(output_path), **output_kwargs)
-        .overwrite_output()
     )
+
+    if has_audio_stream(input_path):
+        stream = ffmpeg.output(video, input_stream.audio, str(output_path), **output_kwargs).overwrite_output()
+    else:
+        # Video sin pista de audio (caso raro, ej. descarga corrupta): no
+        # forzar -map de un stream de audio que no existe.
+        output_kwargs.pop("c:a", None)
+        output_kwargs.pop("b:a", None)
+        stream = ffmpeg.output(video, str(output_path), **output_kwargs).overwrite_output()
     run_ffmpeg(stream)
 
     return output_path

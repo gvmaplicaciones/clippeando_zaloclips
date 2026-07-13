@@ -96,6 +96,24 @@ def run_command(args: list[str], progress_interval: float = 3.0) -> None:
         raise RuntimeError(f"ffmpeg fallo (codigo {proc.returncode})")
 
 
+def has_audio_stream(path: Path | str) -> bool:
+    """True si `path` tiene al menos una pista de audio (via ffprobe)."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "a",
+                "-show_entries", "stream=index",
+                "-of", "csv=p=0",
+                str(path),
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
 def probe_duration(path: Path | str) -> float | None:
     """Duracion en segundos de un archivo de audio/video via ffprobe, o None si falla."""
     try:
