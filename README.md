@@ -1,8 +1,11 @@
 # clip-pipeline
 
-Pipeline para convertir VODs largos en clips cortos listos para redes:
-descarga el video, lo transcribe con Whisper, detecta los mejores momentos
-con Claude (Anthropic) y recorta los clips finales con ffmpeg.
+Pipeline para convertir VODs largos en clips cortos listos para TikTok:
+descarga el video, lo transcribe con Whisper (con timestamps por palabra),
+detecta los mejores momentos con Claude (Anthropic) y genera los clips
+finales en formato vertical 9:16 con subtítulos karaoke quemados. Los
+momentos largos (>90s) se dividen automáticamente en varias partes con un
+aviso de cliffhanger al final de cada una.
 
 El código en `src/` es agnóstico del entorno: no tiene rutas hardcodeadas
 de Google Colab (`/content/...`). Todas las rutas son relativas a la raíz
@@ -18,6 +21,9 @@ clip-pipeline/
   moments/        # JSON de momentos detectados por Claude
   output/         # clips finales (ignorado por git)
   src/            # código del pipeline
+    clip.py        # orquesta: division en partes -> crop vertical -> subtitulos
+    vertical.py    # crop centrado a 9:16 (1080x1920)
+    subtitles.py   # genera y quema el .ass de subtitulos karaoke
   notebooks/
     pipeline_colab.ipynb   # notebook para correr todo en Google Colab
   requirements.txt
@@ -49,9 +55,49 @@ python -m src.pipeline --file input/mi_video.mp4
 
 Esto genera:
 1. `input/<id>.mp4` (si se usó `--url`)
-2. `transcripts/<video>.json`
+2. `transcripts/<video>.json` (con timestamps por palabra)
 3. `moments/<video>.json`
-4. `output/<video>_01_<titulo>.mp4`, `output/<video>_02_<titulo>.mp4`, ...
+4. `output/<video>_01_<titulo>.mp4`, `output/<video>_02_PARTE1.mp4`,
+   `output/<video>_02_PARTE2.mp4`, ... — cada uno ya en 9:16, con subtítulos
+   karaoke quemados. Los momentos de más de 90s se dividen en partes de
+   ~60-70s con un cliffhanger ("PARTE N PRÓXIMAMENTE") al final de cada
+   parte salvo la última.
+
+### Regenerar clips sin re-descargar ni re-transcribir
+
+Si ya tenés `input/<video>.mp4`, `transcripts/<video>.json` y
+`moments/<video>.json` de una corrida anterior (por ejemplo, después de
+actualizar `src/clip.py`), podés regenerar solo los clips finales:
+
+```bash
+python -m src.clip \
+  --video input/<video>.mp4 \
+  --moments moments/<video>.json \
+  --transcript transcripts/<video>.json
+```
+
+`--transcript` es opcional: sin él se sigue aplicando el crop vertical y la
+división en partes, pero sin subtítulos. Si el transcript es de antes de
+esta actualización (sin timestamps por palabra), los subtítulos caen a
+mostrar la frase completa del segmento en vez de resaltar palabra por
+palabra — para tener el karaoke real hay que volver a transcribir.
+
+## Formato vertical, división en partes y subtítulos
+
+- **Vertical 9:16** (`src/vertical.py`): crop centrado (sin face-tracking)
+  a 1080x1920, aplicado a todos los clips.
+- **División en partes** (`src/clip.py`): momentos de más de 90s (
+  `SPLIT_THRESHOLD`) se dividen en partes de ~60-70s (`PART_MIN_DURATION`/
+  `PART_MAX_DURATION`). Si el transcript tiene timestamps por palabra, el
+  corte entre partes se ajusta al fin de la palabra más cercana (±5s,
+  `SNAP_WINDOW`) en vez de cortar a mitad de frase.
+- **Subtítulos karaoke** (`src/subtitles.py`): una palabra a la vez,
+  centrada, con margen suficiente del borde inferior para no quedar tapada
+  por la UI de TikTok (que cubre ~20% inferior de la pantalla). Incluye un
+  título al inicio (`hook_title` del momento, o "PARTE N - Sigue: ..." para
+  partes 2+) y, si no es la última parte, un aviso "PARTE N+1 PRÓXIMAMENTE"
+  en los últimos ~2.5s. Estas constantes están hardcodeadas (no son env
+  vars) porque son parámetros de diseño del formato, no de infraestructura.
 
 ## Configuración
 

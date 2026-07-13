@@ -18,14 +18,15 @@ def run_pipeline(url: str | None = None, file: str | None = None) -> list[Path]:
     video_path, audio_path = ingest(url=url, file=file)
 
     transcript_path = transcribe_video(audio_path)
-    moments_path, _moments, _usage = detect_moments(transcript_path)
-    clip_paths = cut_clips(video_path, moments_path)
+    moments_path, moments, _usage = detect_moments(transcript_path)
+    clip_paths = cut_clips(video_path, moments_path, transcript_path=transcript_path)
 
+    parts = sum(1 for p in clip_paths if "_PARTE" in p.stem)
     print(f"Video: {video_path}")
     print(f"Audio: {audio_path}")
     print(f"Transcript: {transcript_path}")
-    print(f"Moments: {moments_path}")
-    print(f"Clips generados ({len(clip_paths)}):")
+    print(f"Moments: {moments_path} ({len(moments)} momentos detectados)")
+    print(f"Clips generados ({len(clip_paths)}), de los cuales {parts} son partes de momentos largos:")
     for clip_path in clip_paths:
         print(f"  - {clip_path}")
 

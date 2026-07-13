@@ -40,10 +40,20 @@ def transcribe_video(audio_path: Path, output_dir: Path | None = None) -> Path:
     target_dir.mkdir(parents=True, exist_ok=True)
 
     model = _get_model()
-    segments_iter, info = model.transcribe(str(audio_path), language=WHISPER_LANGUAGE)
+    segments_iter, info = model.transcribe(
+        str(audio_path), language=WHISPER_LANGUAGE, word_timestamps=True
+    )
 
     segments = [
-        {"start": seg.start, "end": seg.end, "text": seg.text.strip()}
+        {
+            "start": seg.start,
+            "end": seg.end,
+            "text": seg.text.strip(),
+            "words": [
+                {"start": w.start, "end": w.end, "word": w.word.strip()}
+                for w in (seg.words or [])
+            ],
+        }
         for seg in segments_iter
     ]
 
