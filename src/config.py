@@ -26,6 +26,12 @@ PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", Path(__file__).resolve().parent.pa
 INPUT_DIR = _resolve_dir("INPUT_DIR", PROJECT_ROOT / "input")
 TRANSCRIPTS_DIR = _resolve_dir("TRANSCRIPTS_DIR", PROJECT_ROOT / "transcripts")
 MOMENTS_DIR = _resolve_dir("MOMENTS_DIR", PROJECT_ROOT / "moments")
+METADATA_DIR = _resolve_dir("METADATA_DIR", PROJECT_ROOT / "metadata")
+
+# Los clips finales pueden apuntar a cualquier ruta absoluta fuera del repo
+# (ej. una carpeta sincronizada de Google Drive Desktop en Windows, tipo
+# "G:\Mi unidad\ZaleteClips") seteando OUTPUT_DIR en el .env. Sin esa
+# variable, cae al "output/" del repo como hasta ahora.
 OUTPUT_DIR = _resolve_dir("OUTPUT_DIR", PROJECT_ROOT / "output")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

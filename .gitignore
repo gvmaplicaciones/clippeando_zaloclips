@@ -5,6 +5,7 @@
 input/
 output/
 transcripts/
+metadata/
 
 # Python
 __pycache__/

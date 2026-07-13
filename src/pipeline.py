@@ -21,7 +21,7 @@ def run_pipeline(url: str | None = None, file: str | None = None) -> list[Path]:
     moments_path, moments, _usage = detect_moments(transcript_path)
     clip_paths = cut_clips(video_path, moments_path, transcript_path=transcript_path)
 
-    parts = sum(1 for p in clip_paths if "_PARTE" in p.stem)
+    parts = sum(1 for p in clip_paths if " PARTE " in p.stem)
     print(f"Video: {video_path}")
     print(f"Audio: {audio_path}")
     print(f"Transcript: {transcript_path}")

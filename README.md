@@ -19,11 +19,13 @@ clip-pipeline/
   input/          # VODs descargados (ignorado por git)
   transcripts/    # JSON de whisper (ignorado por git)
   moments/        # JSON de momentos detectados por Claude
-  output/         # clips finales (ignorado por git)
+  metadata/       # id/titulo/etc. de cada VOD descargado (ignorado por git)
+  output/         # clips finales por defecto (ignorado por git; configurable con OUTPUT_DIR)
   src/            # código del pipeline
     clip.py        # orquesta: division en partes -> crop vertical -> subtitulos
     vertical.py    # crop centrado a 9:16 (1080x1920)
     subtitles.py   # genera y quema el .ass de subtitulos karaoke
+    naming.py      # sanitiza nombres de archivo/carpeta para que sean validos en Windows
   notebooks/
     pipeline_colab.ipynb   # notebook para correr todo en Google Colab
   requirements.txt
@@ -57,11 +59,24 @@ Esto genera:
 1. `input/<id>.mp4` (si se usó `--url`)
 2. `transcripts/<video>.json` (con timestamps por palabra)
 3. `moments/<video>.json`
-4. `output/<video>_01_<titulo>.mp4`, `output/<video>_02_PARTE1.mp4`,
-   `output/<video>_02_PARTE2.mp4`, ... — cada uno ya en 9:16, con subtítulos
-   karaoke quemados. Los momentos de más de 90s se dividen en partes de
-   ~60-70s con un cliffhanger ("PARTE N PRÓXIMAMENTE") al final de cada
-   parte salvo la última.
+4. `metadata/<id>.json` (id, título real del video, uploader, etc. — solo si se usó `--url`)
+5. `<OUTPUT_DIR>/<título del video>/<hook_title>.mp4`,
+   `<OUTPUT_DIR>/<título del video>/<hook_title> PARTE 1.mp4`, ... — cada
+   clip ya en 9:16, con subtítulos karaoke quemados y nombrado con el
+   `hook_title` del momento (no el id del video). Los momentos de más de
+   90s se dividen en partes de ~60-70s con un cliffhanger
+   ("PARTE N PRÓXIMAMENTE") al final de cada parte salvo la última. Ejemplo:
+
+   ```
+   output/
+     Organicé un Mundial de Fútbol con Youtubers/
+       GOLAZO DESDE AFUERA DEL AREA.mp4
+       TANDA DE PENALES DEFINITORIA PARTE 1.mp4
+       TANDA DE PENALES DEFINITORIA PARTE 2.mp4
+   ```
+
+   Si dos momentos generan el mismo nombre de archivo, el segundo se
+   guarda como `<hook_title> (2).mp4` para no pisar al primero.
 
 ### Regenerar clips sin re-descargar ni re-transcribir
 
@@ -82,6 +97,18 @@ esta actualización (sin timestamps por palabra), los subtítulos caen a
 mostrar la frase completa del segmento en vez de resaltar palabra por
 palabra — para tener el karaoke real hay que volver a transcribir.
 
+El nombre de la carpeta sale del título real del video guardado en
+`metadata/<id>.json`. Si descargaste ese video antes de que existiera esta
+funcionalidad, no hay metadata todavía y la carpeta cae al id de YouTube en
+vez del título; para completarla sin volver a descargar el video:
+
+```bash
+python -m src.download --url "https://www.youtube.com/watch?v=<id>" --metadata-only
+```
+
+Esto solo pide el título a yt-dlp (no descarga video ni audio) y lo guarda
+en `metadata/<id>.json`, listo para que `src.clip` lo use la próxima vez.
+
 ## Formato vertical, división en partes y subtítulos
 
 - **Vertical 9:16** (`src/vertical.py`): crop centrado (sin face-tracking)
@@ -98,6 +125,15 @@ palabra — para tener el karaoke real hay que volver a transcribir.
   partes 2+) y, si no es la última parte, un aviso "PARTE N+1 PRÓXIMAMENTE"
   en los últimos ~2.5s. Estas constantes están hardcodeadas (no son env
   vars) porque son parámetros de diseño del formato, no de infraestructura.
+- **Carpeta y nombres de archivo** (`src/clip.py`, `src/naming.py`): cada
+  video procesado crea su propia subcarpeta dentro de `OUTPUT_DIR`, nombrada
+  con el título real del video (sacado de `metadata/<id>.json`, ver arriba).
+  Cada clip se nombra con el `hook_title` del momento —
+  `<hook_title>.mp4`, o `<hook_title> PARTE N.mp4` para partes— usando
+  siempre el `hook_title` original del momento, no un texto distinto por
+  parte. `src.naming.sanitize_filename()` quita los caracteres invalidos en
+  nombres de Windows (`\ / : * ? " < > |`) para que la misma carpeta sirva
+  si después se sincroniza a Windows (ej. Google Drive Desktop).
 
 ## Configuración
 
@@ -108,7 +144,8 @@ Todo se configura mediante variables de entorno (ver `.env.example`):
 | `ANTHROPIC_API_KEY` | *(requerida)* | API key de Anthropic |
 | `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Modelo usado para detectar momentos |
 | `PROJECT_ROOT` | raíz del repo | Raíz para resolver `input/`, `transcripts/`, etc. |
-| `INPUT_DIR`, `TRANSCRIPTS_DIR`, `MOMENTS_DIR`, `OUTPUT_DIR` | subcarpetas de `PROJECT_ROOT` | Override individual de cada carpeta |
+| `INPUT_DIR`, `TRANSCRIPTS_DIR`, `MOMENTS_DIR`, `METADATA_DIR` | subcarpetas de `PROJECT_ROOT` | Override individual de cada carpeta |
+| `OUTPUT_DIR` | `output/` del repo | Dónde se guardan los clips finales. Acepta cualquier ruta absoluta fuera del repo, ej. `G:\Mi unidad\ZaleteClips` (una carpeta de Google Drive Desktop en Windows) |
 | `WHISPER_MODEL_SIZE` | `medium` | Tamaño del modelo de faster-whisper |
 | `WHISPER_DEVICE` | `auto` | `cpu`, `cuda` o `auto` |
 | `WHISPER_LANGUAGE` | *(autodetección)* | Forzar idioma de transcripción |

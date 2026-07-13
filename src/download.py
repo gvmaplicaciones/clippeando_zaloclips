@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import ffmpeg
 import yt_dlp
 from dotenv import load_dotenv
 
-from src.config import INPUT_DIR
+from src.config import INPUT_DIR, METADATA_DIR
 from src.ffmpeg_utils import run as run_ffmpeg
 
 # Clientes de YouTube que si respetan las cookies de sesion. Los clientes
@@ -55,6 +56,61 @@ def _cookie_ydl_opts() -> dict:
     return opts
 
 
+def _save_metadata(info: dict, output_dir: Path | None = None) -> Path | None:
+    """Guarda id/titulo/etc. de un video para reutilizarlos sin volver a pedirlos a yt-dlp."""
+    video_id = info.get("id")
+    if not video_id:
+        return None
+
+    target_dir = output_dir or METADATA_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    metadata = {
+        "id": video_id,
+        "title": info.get("title"),
+        "webpage_url": info.get("webpage_url"),
+        "duration": info.get("duration"),
+        "uploader": info.get("uploader"),
+    }
+    metadata_path = target_dir / f"{video_id}.json"
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    return metadata_path
+
+
+def get_video_title(video_path: Path, metadata_dir: Path | None = None) -> str:
+    """Titulo real del video segun METADATA_DIR, o el nombre de archivo si no hay metadata."""
+    video_path = Path(video_path)
+    target_dir = metadata_dir or METADATA_DIR
+    metadata_path = target_dir / f"{video_path.stem}.json"
+
+    if metadata_path.exists():
+        try:
+            data = json.loads(metadata_path.read_text(encoding="utf-8"))
+            title = data.get("title")
+            if title:
+                return title
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    return video_path.stem
+
+
+def fetch_metadata(url: str) -> dict:
+    """Obtiene y guarda id/titulo/etc. de una URL sin descargar el video ni el audio.
+
+    Util para backfillear el titulo de un video que ya se descargo antes de
+    que este modulo empezara a guardar metadata.
+    """
+    ydl_opts = {"noplaylist": True, "skip_download": True}
+    ydl_opts.update(_cookie_ydl_opts())
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    _save_metadata(info)
+    return info
+
+
 def download_vod(url: str, output_dir: Path | None = None) -> Path:
     """Descarga un video desde una URL y devuelve la ruta local del archivo.
 
@@ -77,6 +133,8 @@ def download_vod(url: str, output_dir: Path | None = None) -> Path:
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         filename = ydl.prepare_filename(info)
+
+    _save_metadata(info)
 
     downloaded_path = Path(filename)
     if downloaded_path.suffix != ".mp4":
@@ -119,7 +177,20 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--url", help="URL del VOD a descargar (yt-dlp)")
     group.add_argument("--file", help="Ruta a un video ya existente en input/")
+    parser.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Con --url: solo obtiene y guarda el titulo/metadata, sin descargar video ni audio "
+        "(util para backfillear el titulo de un video descargado antes de esta funcionalidad).",
+    )
     args = parser.parse_args()
+
+    if args.metadata_only:
+        if not args.url:
+            parser.error("--metadata-only requiere --url")
+        info = fetch_metadata(args.url)
+        print(f"Metadata guardada: id={info.get('id')!r} title={info.get('title')!r}")
+        return
 
     video_path, audio_path = ingest(url=args.url, file=args.file)
 

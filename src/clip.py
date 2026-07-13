@@ -17,6 +17,8 @@ from pathlib import Path
 import ffmpeg
 
 from src.config import OUTPUT_DIR
+from src.download import get_video_title
+from src.naming import sanitize_filename
 from src.subtitles import build_ass, burn_subtitles, flatten_words, segments_in_range, words_in_range
 from src.vertical import crop_to_vertical
 
@@ -24,11 +26,6 @@ SPLIT_THRESHOLD = 90.0
 PART_MIN_DURATION = 60.0
 PART_MAX_DURATION = 70.0
 SNAP_WINDOW = 5.0  # tolerancia (segundos) para ajustar cortes a limites de palabra
-
-
-def _slugify(text: str, max_len: int = 60) -> str:
-    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in text).strip()
-    return safe[:max_len] or "clip"
 
 
 def _compute_num_parts(duration: float) -> int:
@@ -99,6 +96,17 @@ def _plan_parts(moment: dict, all_words: list[dict]) -> list[dict]:
     return parts
 
 
+def _dedupe_name(base_name: str, used_names: set[str]) -> str:
+    """Evita pisar un clip si dos momentos generan el mismo nombre de archivo."""
+    candidate = f"{base_name}.mp4"
+    n = 2
+    while candidate.lower() in used_names:
+        candidate = f"{base_name} ({n}).mp4"
+        n += 1
+    used_names.add(candidate.lower())
+    return candidate
+
+
 def cut_clips(
     video_path: Path,
     moments_path: Path,
@@ -107,13 +115,21 @@ def cut_clips(
 ) -> list[Path]:
     """Genera los clips finales a partir de los momentos detectados.
 
+    Los clips se guardan en ``<output_dir>/<titulo del video>/``, nombrados
+    "<hook_title>.mp4" (o "<hook_title> PARTE N.mp4" para momentos
+    divididos en partes). El titulo del video sale de la metadata guardada
+    por src.download (o del nombre de archivo si no hay metadata).
+
     Pipeline por cada parte: recorte + crop vertical 9:16 en una sola pasada
     (para que el corte quede en el frame exacto) -> quemado de subtitulos
     karaoke (+ titulo inicial y cliffhanger si aplica).
     """
     video_path = Path(video_path)
     moments_path = Path(moments_path)
-    target_dir = output_dir or OUTPUT_DIR
+    base_dir = output_dir or OUTPUT_DIR
+
+    video_title = sanitize_filename(get_video_title(video_path))
+    target_dir = base_dir / video_title
     target_dir.mkdir(parents=True, exist_ok=True)
 
     moments = json.loads(moments_path.read_text(encoding="utf-8"))
@@ -124,19 +140,20 @@ def cut_clips(
     all_words = flatten_words(transcript) if transcript else []
 
     clip_paths: list[Path] = []
+    used_names: set[str] = set()
 
     with tempfile.TemporaryDirectory(prefix="clip_pipeline_") as tmp:
         tmp_dir = Path(tmp)
 
         for i, moment in enumerate(moments, start=1):
+            hook_title = sanitize_filename(moment.get("hook_title") or "Momento destacado")
+
             for part in _plan_parts(moment, all_words):
                 part_start, part_end = part["start"], part["end"]
                 part_num = part["part_num"]
 
-                if part_num is None:
-                    final_name = f"{video_path.stem}_{i:02d}_{_slugify(part['title'])}.mp4"
-                else:
-                    final_name = f"{video_path.stem}_{i:02d}_PARTE{part_num}.mp4"
+                base_name = hook_title if part_num is None else f"{hook_title} PARTE {part_num}"
+                final_name = _dedupe_name(base_name, used_names)
 
                 vertical_path = tmp_dir / f"vertical_{i:02d}_{part_num or 0}.mp4"
                 final_path = target_dir / final_name
@@ -190,7 +207,7 @@ def main() -> None:
         transcript_path=Path(args.transcript) if args.transcript else None,
     )
 
-    parts = sum(1 for p in clip_paths if "_PARTE" in p.stem)
+    parts = sum(1 for p in clip_paths if " PARTE " in p.stem)
     print(f"Clips generados ({len(clip_paths)}), de los cuales {parts} son partes de momentos largos:")
     for clip_path in clip_paths:
         print(f"  - {clip_path}")
