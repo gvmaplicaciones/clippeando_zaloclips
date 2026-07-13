@@ -16,10 +16,20 @@ from pathlib import Path
 
 import ffmpeg
 
+from src.campaigns import get_campaign
+from src.campaigns import list_campaigns as list_campaign_profiles
 from src.config import OUTPUT_DIR
+from src.detect_moments import MIN_CLIP_DURATION, shrink_moment_to_subsegment
 from src.download import get_video_title
 from src.naming import sanitize_filename
-from src.subtitles import build_ass, burn_subtitles, flatten_words, segments_in_range, words_in_range
+from src.subtitles import (
+    build_ass,
+    burn_subtitles,
+    flatten_words,
+    resolve_subtitle_font,
+    segments_in_range,
+    words_in_range,
+)
 from src.vertical import crop_to_vertical
 from src.watermark import add_watermark
 from src.watermarks import get_watermark, list_watermarks
@@ -115,6 +125,7 @@ def cut_clips(
     transcript_path: Path | None = None,
     output_dir: Path | None = None,
     watermark: str | None = None,
+    campaign: str | None = None,
 ) -> list[Path]:
     """Genera los clips finales a partir de los momentos detectados.
 
@@ -126,18 +137,48 @@ def cut_clips(
     Pipeline por cada parte: recorte + crop vertical 9:16 en una sola pasada
     (para que el corte quede en el frame exacto) -> quemado de subtitulos
     karaoke (+ titulo inicial y cliffhanger si aplica) -> si se paso
-    `watermark` (nombre de una marca de src.watermarks.WATERMARKS), se
-    aplica sobre el archivo final ya en esta misma corrida, sin necesidad
-    de correr src.watermark aparte despues.
+    `watermark` o `campaign`, se aplica la marca sobre el archivo final ya
+    en esta misma corrida, sin necesidad de correr src.watermark aparte
+    despues.
+
+    `campaign` (ID de src.campaigns.WATERMARKS, ej. "1") agrupa marca de
+    agua + `allow_split` + estilo de subtitulos en un solo perfil; no se
+    puede combinar con `watermark` suelto (`campaign` ya incluye su propia
+    marca). Si la campaña tiene `allow_split=False`, los momentos de mas de
+    SPLIT_THRESHOLD segundos no se dividen en partes: en su lugar se le
+    pide a Claude (src.detect_moments.shrink_moment_to_subsegment) un
+    sub-segmento autocontenido mas corto, o se descarta el momento si
+    Claude determina que ninguno funciona solo.
     """
     video_path = Path(video_path)
     moments_path = Path(moments_path)
     base_dir = output_dir or OUTPUT_DIR
 
-    # Resolver la marca de agua ANTES de generar nada: si el nombre no
-    # existe, mejor fallar de una con un mensaje claro que despues de
+    if watermark and campaign:
+        raise ValueError(
+            "--watermark y --campaign no se pueden combinar: --campaign ya incluye su propia marca de agua."
+        )
+
+    # Resolver marca de agua y campaña ANTES de generar nada: si el nombre
+    # no existe, mejor fallar de una con un mensaje claro que despues de
     # procesar todos los clips.
+    campaign_obj = get_campaign(campaign) if campaign else None
     wm_config = get_watermark(watermark) if watermark else None
+    if campaign_obj is not None and campaign_obj.watermark_text:
+        wm_config = {"text": campaign_obj.watermark_text, "logo": campaign_obj.watermark_logo}
+
+    allow_split = campaign_obj.allow_split if campaign_obj is not None else True
+
+    ass_style_kwargs: dict = {}
+    if campaign_obj is not None:
+        preferred_font = campaign_obj.subtitle_style.font_candidates[0]
+        resolved_font = resolve_subtitle_font(campaign_obj.subtitle_style.font_candidates)
+        if resolved_font != preferred_font:
+            print(
+                f"Aviso: fuente preferida '{preferred_font}' para la campaña '{campaign_obj.name}' "
+                f"no esta instalada en este sistema, usando '{resolved_font}' en su lugar."
+            )
+        ass_style_kwargs = {"font_name": resolved_font, "text_color": campaign_obj.subtitle_style.text_color}
 
     video_title = sanitize_filename(get_video_title(video_path))
     target_dir = base_dir / video_title
@@ -157,6 +198,34 @@ def cut_clips(
         tmp_dir = Path(tmp)
 
         for i, moment in enumerate(moments, start=1):
+            duration = moment["end"] - moment["start"]
+            if not allow_split and duration > SPLIT_THRESHOLD:
+                label = moment.get("hook_title") or "Momento destacado"
+                if transcript is None:
+                    print(
+                        f"  Momento {i} ('{label}', {duration:.0f}s): esta campaña no permite "
+                        "dividir en partes y no hay transcript para pedirle a Claude un "
+                        "sub-segmento. Se descarta."
+                    )
+                    continue
+                shrunk = shrink_moment_to_subsegment(
+                    moment, transcript, min_duration=MIN_CLIP_DURATION, max_duration=SPLIT_THRESHOLD
+                )
+                if shrunk is None:
+                    print(
+                        f"  Momento {i} ('{label}', {duration:.0f}s): no se puede dividir en "
+                        "partes para esta campaña y Claude no encontro un sub-segmento "
+                        "autocontenido. Se descarta."
+                    )
+                    continue
+                print(
+                    f"  Momento {i} ('{label}'): recortado de {duration:.0f}s a un sub-segmento "
+                    f"autocontenido de {shrunk['end'] - shrunk['start']:.0f}s "
+                    f"({shrunk['start']:.1f}-{shrunk['end']:.1f}s) porque esta campaña no "
+                    "permite dividir en partes."
+                )
+                moment = shrunk
+
             hook_title = sanitize_filename(moment.get("hook_title") or "Momento destacado")
 
             for part in _plan_parts(moment, all_words):
@@ -191,6 +260,7 @@ def cut_clips(
                     segments=segments or None,
                     title=part["title"],
                     cliffhanger_text=cliffhanger_text,
+                    **ass_style_kwargs,
                 )
                 burn_subtitles(vertical_path, ass_content, ass_path, final_path)
 
@@ -219,24 +289,39 @@ def main() -> None:
         help="Ruta al transcript JSON (transcripts/xxx.json). Habilita subtitulos karaoke "
         "y el ajuste de cortes a limite de palabra si tiene timestamps por palabra.",
     )
-    parser.add_argument(
+    wm_group = parser.add_mutually_exclusive_group()
+    wm_group.add_argument(
         "--watermark",
         help="Nombre de una marca de src.watermarks.WATERMARKS a aplicar sobre cada clip "
         "final en la misma corrida (ver --list-watermarks). Sin esto, los clips salen sin marca.",
+    )
+    wm_group.add_argument(
+        "--campaign",
+        help="ID numerico de una campaña de campaigns.json (agrupa marca de agua + si "
+        "permite dividir en partes + estilo de subtitulos en un solo perfil, ver "
+        "--list-campaigns). No se puede combinar con --watermark.",
     )
     parser.add_argument(
         "--list-watermarks",
         action="store_true",
         help="Lista las marcas de agua disponibles y termina, sin generar clips.",
     )
+    parser.add_argument(
+        "--list-campaigns",
+        action="store_true",
+        help="Lista las campañas disponibles (campaigns.json) y termina, sin generar clips.",
+    )
     args = parser.parse_args()
 
     if args.list_watermarks:
         list_watermarks()
         return
+    if args.list_campaigns:
+        list_campaign_profiles()
+        return
 
     if not args.video or not args.moments:
-        parser.error("--video y --moments son requeridos (salvo con --list-watermarks)")
+        parser.error("--video y --moments son requeridos (salvo con --list-watermarks/--list-campaigns)")
 
     try:
         clip_paths = cut_clips(
@@ -244,6 +329,7 @@ def main() -> None:
             Path(args.moments),
             transcript_path=Path(args.transcript) if args.transcript else None,
             watermark=args.watermark,
+            campaign=args.campaign,
         )
     except ValueError as e:
         parser.error(str(e))

@@ -1,0 +1,26 @@
+{
+  "1": {
+    "name": "Ampeter",
+    "watermark": {
+      "text": "ampeterby7",
+      "logo": "Youtube_logo.png"
+    },
+    "allow_split": true,
+    "subtitle_style": {
+      "text_color": "white",
+      "font_candidates": ["DejaVu Sans"]
+    }
+  },
+  "2": {
+    "name": "Luis Luceo",
+    "watermark": {
+      "text": "@luisluceo",
+      "logo": "Youtube_logo.png"
+    },
+    "allow_split": false,
+    "subtitle_style": {
+      "text_color": "yellow",
+      "font_candidates": ["Sora", "Poppins", "Montserrat", "DejaVu Sans"]
+    }
+  }
+}

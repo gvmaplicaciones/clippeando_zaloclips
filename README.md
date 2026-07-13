@@ -21,6 +21,7 @@ clip-pipeline/
   moments/        # JSON de momentos detectados por Claude
   metadata/       # id/titulo/etc. de cada VOD descargado (ignorado por git)
   output/         # clips finales por defecto (ignorado por git; configurable con OUTPUT_DIR)
+  campaigns.json  # perfiles de campaña: marca de agua + split + estilo de subtitulos
   src/            # código del pipeline
     clip.py        # orquesta: division en partes -> crop vertical -> subtitulos
     vertical.py    # crop centrado a 9:16 (1080x1920)
@@ -28,6 +29,8 @@ clip-pipeline/
     naming.py      # sanitiza nombres de archivo/carpeta para que sean validos en Windows
     watermark.py   # quema el logo + texto sobre un clip (funcion compartida + script independiente)
     watermarks.py  # registro de marcas de agua conocidas por nombre (texto + logo)
+    campaigns.py   # carga campaigns.json: perfiles de campaña por numero
+    detect_moments.py  # deteccion de momentos + recorte a sub-segmento via LLM (campañas sin split)
   notebooks/
     pipeline_colab.ipynb   # notebook para correr todo en Google Colab
   requirements.txt
@@ -56,8 +59,11 @@ python -m src.pipeline --url "https://..."
 # a partir de un archivo ya descargado en input/
 python -m src.pipeline --file input/mi_video.mp4
 
-# aplicando una marca de agua (ver "Marca de agua" mas abajo) en la misma corrida
+# aplicando una marca de agua suelta (ver "Marca de agua" mas abajo) en la misma corrida
 python -m src.pipeline --url "https://..." --watermark ampeter
+
+# o un perfil de campaña completo (marca + split + subtitulos, ver "Campañas" mas abajo)
+python -m src.pipeline --url "https://..." --campaign 2
 ```
 
 Esto genera:
@@ -182,6 +188,67 @@ instalada en tu máquina.
 Al arrancar, el script chequea que el PNG del logo tenga transparencia
 real (no solo modo RGBA — también que existan píxeles con alpha < 255) y
 avisa si no la tiene, antes de aplicar el watermark a ningún clip.
+
+### Campañas
+
+Cada campaña de clipping puede tener su propia marca de agua, su propia
+regla de división en partes y su propio estilo de subtítulos. En vez de
+combinar `--watermark`, `--no-split` y `--subtitle-style` sueltos cada
+vez, `--campaign <numero>` carga los tres de una:
+
+```bash
+python -m src.pipeline --url "..." --campaign 2
+python -m src.clip --video ... --moments ... --transcript ... --campaign 1
+python -m src.clip --list-campaigns
+```
+
+Los perfiles se definen en `campaigns.json` (raíz del repo), un objeto con
+un bloque por campaña indexado por su ID numérico:
+
+```json
+{
+  "1": {
+    "name": "Ampeter",
+    "watermark": {"text": "ampeterby7", "logo": "Youtube_logo.png"},
+    "allow_split": true,
+    "subtitle_style": {"text_color": "white", "font_candidates": ["DejaVu Sans"]}
+  },
+  "2": {
+    "name": "Luis Luceo",
+    "watermark": {"text": "@luisluceo", "logo": "Youtube_logo.png"},
+    "allow_split": false,
+    "subtitle_style": {"text_color": "yellow", "font_candidates": ["Sora", "Poppins", "Montserrat", "DejaVu Sans"]}
+  }
+}
+```
+
+Agregar una campaña nueva es agregar un bloque con el siguiente número
+ahí — no hace falta tocar código en ningún otro archivo. `logo` es
+relativo a la raíz del repo. `font_candidates` es una lista de nombres de
+familia tipográfica en orden de preferencia: `src.subtitles.resolve_subtitle_font()`
+usa `fc-list` para elegir la primera que esté instalada en la máquina
+donde corre el pipeline, y avisa por consola cuál usó si la preferida (ej.
+"Sora") no está disponible y cayó a un fallback.
+
+`--campaign` y `--watermark` son mutuamente excluyentes (`--campaign` ya
+incluye su propia marca). Sin `--campaign` ni `--watermark`, el
+comportamiento es el de siempre: sin marca, división en partes permitida,
+subtítulos blancos.
+
+**`allow_split: false`** (campaña "Luis Luceo"): un momento de más de 90s
+normalmente se divide en "PARTE 1"/"PARTE 2" con cliffhanger. Si la
+campaña no permite eso, en cambio se le pide a Claude
+(`src.detect_moments.shrink_moment_to_subsegment`) que elija un único
+sub-segmento autocontenido de 20-90s dentro del momento — con inicio y
+remate propios, sin necesitar el resto para tener sentido. Si Claude
+determina que ningún sub-segmento de esa duración funciona solo, el
+momento se descarta (se imprime por qué). Esto requiere `--transcript`;
+sin transcript no hay texto que darle a Claude para elegir el
+sub-segmento, así que el momento también se descarta.
+
+Un ID de campaña que no existe falla con un mensaje claro listando los
+IDs y nombres válidos, antes de generar ningún clip (o, en
+`src.pipeline`, antes de descargar/transcribir nada).
 
 ## Formato vertical, división en partes y subtítulos
 

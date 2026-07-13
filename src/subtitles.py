@@ -7,6 +7,7 @@ palabra por palabra.
 """
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import ffmpeg
@@ -16,6 +17,40 @@ from src.ffmpeg_utils import run as run_ffmpeg
 from src.vertical import VERTICAL_HEIGHT, VERTICAL_WIDTH
 
 FONT_NAME = "DejaVu Sans"
+
+# Colores de texto disponibles para el estilo Karaoke por nombre, en formato
+# ASS/libass (&HAABBGGRR: alpha, luego B-G-R en vez de R-G-B). "white" es el
+# estilo actual (default). Un nombre no listado aca se puede pasar tal cual
+# como hex ASS crudo (build_ass no valida el formato).
+KARAOKE_COLOR_ASS = {
+    "white": "&H00FFFFFF",
+    "yellow": "&H0000FFFF",
+}
+
+
+def resolve_subtitle_font(candidates: list[str], fallback: str = FONT_NAME) -> str:
+    """Primer nombre de familia de `candidates` instalado en el sistema (via fontconfig).
+
+    libass resuelve el ``Fontname`` del .ass contra fontconfig por nombre de
+    familia, no por archivo (a diferencia de drawtext/fontfile en
+    src.watermark), asi que la deteccion es por ``fc-list`` en vez de
+    chequear rutas de archivo. Si no se encuentra ninguno de los candidatos
+    (ej. "Sora" no esta instalada en esta maquina), cae a `fallback`.
+    """
+    try:
+        result = subprocess.run(
+            ["fc-list", "--format=%{family}\n"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return fallback
+    if result.returncode != 0:
+        return fallback
+    available = result.stdout.lower()
+    for name in candidates:
+        if name.lower() in available:
+            return name
+    return fallback
 
 # El 20% inferior del frame en TikTok suele estar cubierto por la UI de la
 # app (caption propia, botones de interaccion, barra de descripcion). Dejamos
@@ -85,7 +120,12 @@ def _escape_ass_text(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}").strip()
 
 
-_ASS_HEADER = f"""[Script Info]
+def _build_ass_header(karaoke_font: str, karaoke_color_ass: str) -> str:
+    """Header .ass parametrizado por campaña: fuente y color del estilo Karaoke
+    (el texto palabra-por-palabra). Title y Cliffhanger mantienen su estilo
+    fijo (dorado / blanco) en todas las campañas - solo el texto principal
+    de los subtitulos varia."""
+    return f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {VERTICAL_WIDTH}
 PlayResY: {VERTICAL_HEIGHT}
@@ -94,7 +134,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Karaoke,{FONT_NAME},88,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,6,0,2,60,60,{CAPTION_MARGIN_V},1
+Style: Karaoke,{karaoke_font},88,{karaoke_color_ass},&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,6,0,2,60,60,{CAPTION_MARGIN_V},1
 Style: Title,{FONT_NAME},72,&H0000D7FF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,6,0,8,60,60,140,1
 Style: Cliffhanger,{FONT_NAME},64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,3,0,0,5,80,80,0,1
 
@@ -109,13 +149,23 @@ def build_ass(
     segments: list[dict] | None = None,
     title: str | None = None,
     cliffhanger_text: str | None = None,
+    font_name: str = FONT_NAME,
+    text_color: str = "white",
 ) -> str:
     """Arma el contenido de un archivo .ass para un clip de `duration` segundos.
 
     `words` (timestamps por palabra, tiempos relativos al clip) tiene
     prioridad para el efecto karaoke; si no hay, se usa `segments`
     (texto completo por frase) como caption estatica de fallback.
+
+    `font_name` y `text_color` controlan el estilo Karaoke (el texto
+    principal, palabra-por-palabra) para poder variarlo por campaña;
+    `text_color` acepta un nombre conocido de KARAOKE_COLOR_ASS ("white",
+    "yellow") o un hex ASS crudo (``&HAABBGGRR``) para colores nuevos sin
+    tener que tocar este archivo.
     """
+    ass_color = KARAOKE_COLOR_ASS.get(text_color, text_color)
+    header = _build_ass_header(font_name, ass_color)
     events: list[str] = []
 
     cliffhanger_start = None
@@ -159,7 +209,7 @@ def build_ass(
                 f"Karaoke,,0,0,0,,{text}"
             )
 
-    return _ASS_HEADER + "\n".join(events) + "\n"
+    return header + "\n".join(events) + "\n"
 
 
 def _escape_ffmpeg_filter_path(path: Path) -> str:
