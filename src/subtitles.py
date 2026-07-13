@@ -190,13 +190,20 @@ def _escape_ffmpeg_filter_path(path: Path) -> str:
     return f"filename='{escaped}'"
 
 
-def burn_subtitles(input_path: Path, ass_content: str, output_path: Path) -> Path:
-    """Escribe `ass_content` a disco y quema los subtitulos sobre input_path."""
+def burn_subtitles(input_path: Path, ass_content: str, ass_path: Path, output_path: Path) -> Path:
+    """Escribe `ass_content` en `ass_path` y quema esos subtitulos sobre input_path.
+
+    `ass_path` es un archivo intermedio (el filtro ``ass`` de ffmpeg lo lee
+    en disco) que el llamador debe ubicar en una carpeta temporal, no en la
+    carpeta de salida final: no es un entregable, solo hace falta durante el
+    quemado. `output_path` no tiene por que compartir carpeta con `ass_path`.
+    """
     input_path = Path(input_path)
+    ass_path = Path(ass_path)
     output_path = Path(output_path)
+    ass_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    ass_path = output_path.with_suffix(".ass")
     ass_path.write_text(ass_content, encoding="utf-8")
 
     vf = f"ass={_escape_ffmpeg_filter_path(ass_path)}"

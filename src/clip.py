@@ -156,6 +156,7 @@ def cut_clips(
                 final_name = _dedupe_name(base_name, used_names)
 
                 vertical_path = tmp_dir / f"vertical_{i:02d}_{part_num or 0}.mp4"
+                ass_path = tmp_dir / f"sub_{i:02d}_{part_num or 0}.ass"
                 final_path = target_dir / final_name
 
                 crop_to_vertical(
@@ -180,7 +181,7 @@ def cut_clips(
                     title=part["title"],
                     cliffhanger_text=cliffhanger_text,
                 )
-                burn_subtitles(vertical_path, ass_content, final_path)
+                burn_subtitles(vertical_path, ass_content, ass_path, final_path)
 
                 clip_paths.append(final_path)
 
