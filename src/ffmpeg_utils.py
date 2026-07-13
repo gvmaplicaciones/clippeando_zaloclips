@@ -8,8 +8,11 @@ relanzar la excepcion si algo falla.
 """
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import ffmpeg
@@ -25,7 +28,7 @@ def run(stream) -> None:
         raise
 
 
-def run_command(args: list[str]) -> None:
+def run_command(args: list[str], progress_interval: float = 3.0) -> None:
     """Corre un comando de ffmpeg armado a mano (lista de argv).
 
     Para casos con multiples inputs y ``-map`` explicitos (ej. overlay de un
@@ -33,13 +36,64 @@ def run_command(args: list[str]) -> None:
     expresa bien un ``-map`` repetido, asi que se arma el comando directo en
     vez de forzarlo por ese DSL (mismo motivo que ``escape_filter_path``:
     evitar el escapado automatico de ffmpeg-python).
+
+    Imprime el comando exacto antes de correrlo (para poder diagnosticar
+    lentitud inspeccionando el preset/filtros reales) y progreso en vivo
+    (tiempo procesado, fps, velocidad) cada ``progress_interval`` segundos en
+    vez de bloquear en silencio hasta que termine - asi se puede distinguir
+    "esta avanzando lento" de "esta colgado".
     """
-    result = subprocess.run(args, capture_output=True)
-    if result.returncode != 0:
-        stderr = result.stderr.decode(errors="replace")
+    print("Comando ffmpeg:", " ".join(shlex.quote(a) for a in args), flush=True)
+
+    # "-progress pipe:1" hace que ffmpeg escriba pares clave=valor por stdout
+    # en cada frame procesado (out_time, speed, fps, ...) ademas del log
+    # normal por stderr; "-nostats" apaga la linea de progreso default que
+    # ffmpeg ya escribe por stderr para no duplicarla.
+    full_args = [args[0], "-progress", "pipe:1", "-nostats", *args[1:]]
+
+    proc = subprocess.Popen(
+        full_args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+
+    stderr_lines: list[str] = []
+
+    def _drain_stderr() -> None:
+        assert proc.stderr is not None
+        for line in proc.stderr:
+            stderr_lines.append(line)
+
+    stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+    stderr_thread.start()
+
+    assert proc.stdout is not None
+    fields: dict[str, str] = {}
+    last_print = 0.0
+    for raw_line in proc.stdout:
+        key, _, value = raw_line.strip().partition("=")
+        if not key:
+            continue
+        fields[key] = value
+        if key == "progress":
+            now = time.monotonic()
+            if value == "end" or now - last_print >= progress_interval:
+                print(
+                    f"  ffmpeg: tiempo={fields.get('out_time', '?')} "
+                    f"fps={fields.get('fps', '?')} speed={fields.get('speed', '?')}",
+                    flush=True,
+                )
+                last_print = now
+
+    proc.wait()
+    stderr_thread.join()
+
+    if proc.returncode != 0:
         print("ERROR de ffmpeg. stderr completo:", file=sys.stderr, flush=True)
-        print(stderr, file=sys.stderr, flush=True)
-        raise RuntimeError(f"ffmpeg fallo (codigo {result.returncode})")
+        print("".join(stderr_lines), file=sys.stderr, flush=True)
+        raise RuntimeError(f"ffmpeg fallo (codigo {proc.returncode})")
 
 
 def escape_filter_path(path: Path | str) -> str:

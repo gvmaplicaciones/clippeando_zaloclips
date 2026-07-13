@@ -196,7 +196,10 @@ def add_watermark(
         "-filter_complex", filter_complex,
         "-map", "[out]",
         "-map", "0:a?",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+        # "ultrafast": esto es un segundo pase liviano (overlay+texto) sobre
+        # un clip corto para redes sociales, no una entrega final - prioriza
+        # velocidad sobre tamaño/compresión optima.
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "copy",
         "-shortest",
         str(render_path),
