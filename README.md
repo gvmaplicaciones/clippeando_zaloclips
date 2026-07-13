@@ -26,6 +26,7 @@ clip-pipeline/
     vertical.py    # crop centrado a 9:16 (1080x1920)
     subtitles.py   # genera y quema el .ass de subtitulos karaoke
     naming.py      # sanitiza nombres de archivo/carpeta para que sean validos en Windows
+    watermark.py   # script independiente: quema un watermark de texto sobre clips ya generados
   notebooks/
     pipeline_colab.ipynb   # notebook para correr todo en Google Colab
   requirements.txt
@@ -108,6 +109,34 @@ python -m src.download --url "https://www.youtube.com/watch?v=<id>" --metadata-o
 
 Esto solo pide el título a yt-dlp (no descarga video ni audio) y lo guarda
 en `metadata/<id>.json`, listo para que `src.clip` lo use la próxima vez.
+
+### Watermark sobre clips ya generados
+
+`src/watermark.py` es un script aparte del pipeline: no reprocesa nada
+desde el video original, solo quema un texto pequeño y permanente
+("YT: ampeterby7" por defecto) en la esquina inferior derecha de clips
+`.mp4` que ya existen, con margen respecto al borde para no chocar con la
+UI de TikTok. Corre en batch sobre toda una carpeta:
+
+```bash
+python -m src.watermark --folder "output/<título del video>"
+
+# En Windows, sobre una carpeta de Google Drive Desktop:
+python -m src.watermark --folder "G:\Mi unidad\ZaleteClips\<carpeta del video>"
+```
+
+Por default genera una copia nueva `<nombre>_wm.mp4` junto a cada original
+(no destructivo) y salta los `.mp4` que ya terminan en `_wm` si corrés el
+comando de nuevo. Para sobreescribir los originales en lugar de crear
+copias, agregá `--overwrite` (renderiza a un archivo temporal y recién
+reemplaza el original si ffmpeg termina bien, para no perder el clip si
+algo falla a mitad de camino). Otras opciones: `--text "..."` para cambiar
+el texto, `--font-file /ruta/a/fuente.ttf` si la autodetección de fuente
+(Arial en Windows, DejaVu/Liberation en Linux, Arial en macOS) no encuentra
+ninguna instalada en tu máquina.
+
+Por ahora es solo texto — si más adelante querés el logo real de YouTube
+superpuesto, se puede agregar un filtro `overlay` con un PNG.
 
 ## Formato vertical, división en partes y subtítulos
 

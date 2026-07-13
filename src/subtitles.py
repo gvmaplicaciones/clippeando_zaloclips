@@ -11,6 +11,7 @@ from pathlib import Path
 
 import ffmpeg
 
+from src.ffmpeg_utils import escape_filter_path
 from src.ffmpeg_utils import run as run_ffmpeg
 from src.vertical import VERTICAL_HEIGHT, VERTICAL_WIDTH
 
@@ -162,11 +163,7 @@ def build_ass(
 
 
 def _escape_ffmpeg_filter_path(path: Path) -> str:
-    """Escapa una ruta para usarla como valor del filtro ``ass``/``subtitles``.
-
-    Dentro del mini-lenguaje de filtros de ffmpeg, ':' separa opciones y
-    '\\' es caracter de escape, asi que una ruta de Windows como
-    ``C:\\Users\\x\\clip.ass`` rompe el parseo si se pasa tal cual.
+    """Arma el valor ``filename='...'`` del filtro ``ass``/``subtitles``.
 
     Verificado empiricamente contra ffmpeg real (no solo por doc): ni pasar
     la ruta como primer valor posicional con ':' escapado (``ass=C\\:/...``)
@@ -175,19 +172,10 @@ def _escape_ffmpeg_filter_path(path: Path) -> str:
     siguiente opcion del filtro (``original_size``), fallando con "Unable to
     parse option value ... as image size". Lo unico que funciono fue usar la
     clave explicita ``filename=`` con el valor entre comillas simples Y el
-    ':' escapado adentro: ``ass=filename='C\\:/Users/.../clip.ass'``.
-
-    Se arma como el valor crudo de la opcion ``-vf`` (ver ``burn_subtitles``)
-    en vez de via ``.filter()`` de ffmpeg-python: ese metodo aplica su propio
-    escapado automatico pensado para grafos de filtros, y al recibir una
-    ruta que ya tiene backslashes termina multiplicandolos (`C:\\...` ->
-    `C\\\\\\\\\\\\:\\\\...`), generando una ruta corrupta que libass no
-    puede abrir.
+    ':' escapado adentro: ``ass=filename='C\\:/Users/.../clip.ass'`` (ver
+    ``src.ffmpeg_utils.escape_filter_path`` para el escapado en si).
     """
-    escaped = str(path).replace("\\", "/")
-    escaped = escaped.replace("'", "'\\''")  # por si la ruta tuviera comillas simples
-    escaped = escaped.replace(":", "\\:")
-    return f"filename='{escaped}'"
+    return f"filename='{escape_filter_path(path)}'"
 
 
 def burn_subtitles(input_path: Path, ass_content: str, ass_path: Path, output_path: Path) -> Path:
