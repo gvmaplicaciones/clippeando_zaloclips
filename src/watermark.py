@@ -1,22 +1,34 @@
-"""Quema un watermark de texto permanente sobre clips ya generados.
+"""Quema un watermark permanente (logo + texto) sobre clips ya generados.
 
 Script independiente del pipeline principal: opera sobre .mp4 que ya
 existen (vertical, con subtitulos ya quemados), no reprocesa nada desde el
-video original. Por ahora es solo texto - si mas adelante se quiere el logo
-real de YouTube, se puede agregar un filtro ``overlay`` con un PNG.
+video original. Superpone el logo de YouTube (``Youtube_logo.png`` en la
+raiz del repo por default) en la esquina inferior derecha, con el texto
+"ampeterby7" a su izquierda, durante el 100% de la duracion del clip.
 """
 from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
-import ffmpeg
+from PIL import Image
 
+from src.config import PROJECT_ROOT
 from src.ffmpeg_utils import escape_filter_path
-from src.ffmpeg_utils import run as run_ffmpeg
+from src.ffmpeg_utils import run_command as run_ffmpeg_command
 
-WATERMARK_TEXT = "YT: ampeterby7"
+WATERMARK_TEXT = "ampeterby7"
+DEFAULT_LOGO_PATH = PROJECT_ROOT / "Youtube_logo.png"
+
+# Alto fijo del logo en pixeles (los clips del pipeline son siempre 1080x1920,
+# asi que un valor fijo en vez de una fraccion de la resolucion es mas facil
+# de razonar visualmente). El ancho se deriva de este alto respetando la
+# proporcion original del PNG.
+LOGO_HEIGHT_PX = 50
+# Separacion horizontal entre el texto y el logo.
+TEXT_LOGO_GAP_PX = 14
 
 WATERMARK_FONT_SIZE = 32
 WATERMARK_FONT_COLOR = "white"
@@ -65,8 +77,52 @@ def _escape_drawtext_text(text: str) -> str:
     return escaped
 
 
-def _build_drawtext_filter(text: str, font_file: str | None) -> str:
+def check_logo_transparency(logo_path: Path) -> bool:
+    """Devuelve True si `logo_path` tiene canal alpha con transparencia real.
+
+    No solo chequea el modo ("RGBA"); un PNG puede declarar canal alpha y
+    tenerlo siempre en 255 (opaco), lo que en la practica seria una caja de
+    fondo solida igual. Chequea que existan pixeles con alpha < 255.
+    """
+    with Image.open(logo_path) as img:
+        if img.mode not in ("RGBA", "LA", "PA"):
+            return False
+        alpha = img.convert("RGBA").split()[-1]
+        min_alpha, _max_alpha = alpha.getextrema()
+        return min_alpha < 255
+
+
+def _logo_scaled_width(logo_path: Path, target_height: int) -> int:
+    with Image.open(logo_path) as img:
+        orig_w, orig_h = img.size
+    return max(1, round(target_height * orig_w / orig_h))
+
+
+def _build_filter_complex(
+    text: str,
+    logo_w: int,
+    logo_h: int,
+    font_file: str | None,
+) -> str:
+    """Arma el filter_complex: escala el logo, lo superpone, y agrega el texto.
+
+    Cadena: [1:v] se escala al tamaño del logo -> se overlay-ea sobre [0:v]
+    en la esquina inferior derecha -> se le agrega el texto con drawtext
+    inmediatamente a la izquierda del logo, centrado verticalmente con el.
+    Todas las posiciones usan fracciones del frame (no pixeles fijos) salvo
+    el tamaño del logo en si, que es un valor fijo en px por diseño.
+    """
     resolved_font = font_file or _find_font_file()
+
+    logo_x = f"W-w-({MARGIN_RIGHT_FRACTION}*W)"
+    logo_y = f"H-h-({MARGIN_BOTTOM_FRACTION}*H)"
+    overlay_filter = f"[0:v][logo]overlay=x='{logo_x}':y='{logo_y}'[with_logo]"
+
+    # Mismas formulas que logo_x/logo_y pero evaluadas con w/h (dimensiones
+    # del frame en drawtext) y con logo_w/logo_h ya conocidos en Python, para
+    # que el texto quede pegado al logo sin superponerse.
+    text_x = f"w-{logo_w}-({MARGIN_RIGHT_FRACTION}*w)-{TEXT_LOGO_GAP_PX}-text_w"
+    text_y = f"h-{logo_h}-({MARGIN_BOTTOM_FRACTION}*h)+(({logo_h}-text_h)/2)"
 
     options = [f"text='{_escape_drawtext_text(text)}'"]
     if resolved_font:
@@ -76,7 +132,6 @@ def _build_drawtext_filter(text: str, font_file: str | None) -> str:
         # confiar en fontconfig (requiere un ffmpeg compilado con
         # --enable-fontconfig; no todos los builds de Windows lo traen).
         options.append("font=Sans")
-
     options += [
         f"fontsize={WATERMARK_FONT_SIZE}",
         f"fontcolor={WATERMARK_FONT_COLOR}",
@@ -85,19 +140,29 @@ def _build_drawtext_filter(text: str, font_file: str | None) -> str:
         f"shadowx={WATERMARK_SHADOW_OFFSET}",
         f"shadowy={WATERMARK_SHADOW_OFFSET}",
         f"shadowcolor={WATERMARK_SHADOW_COLOR}",
-        f"x=w-text_w-({MARGIN_RIGHT_FRACTION}*w)",
-        f"y=h-text_h-({MARGIN_BOTTOM_FRACTION}*h)",
+        f"x={text_x}",
+        f"y={text_y}",
     ]
-    return "drawtext=" + ":".join(options)
+    drawtext_filter = "[with_logo]drawtext=" + ":".join(options) + "[out]"
+
+    return ";".join(
+        [
+            f"[1:v]scale={logo_w}:{logo_h}[logo]",
+            overlay_filter,
+            drawtext_filter,
+        ]
+    )
 
 
 def add_watermark(
     clip_path: Path,
     output_path: Path | None = None,
     text: str = WATERMARK_TEXT,
+    logo_path: Path = DEFAULT_LOGO_PATH,
     font_file: str | None = None,
 ) -> Path:
-    """Quema `text` como watermark permanente (100% de la duracion) sobre `clip_path`.
+    """Superpone el logo de YouTube + `text` como watermark permanente
+    (100% de la duracion, estatico) sobre `clip_path`.
 
     Si `output_path` es None, guarda como "<nombre>_wm.mp4" junto al
     original (no destructivo). Si `output_path` es el mismo archivo que
@@ -105,6 +170,12 @@ def add_watermark(
     recien reemplaza el original si ffmpeg termina bien.
     """
     clip_path = Path(clip_path)
+    logo_path = Path(logo_path)
+    if not logo_path.exists():
+        raise FileNotFoundError(
+            f"No se encontro el logo en {logo_path}. Pasa --logo-file para usar otra ruta."
+        )
+
     output_path = Path(output_path) if output_path else clip_path.with_name(
         f"{clip_path.stem}_wm{clip_path.suffix}"
     )
@@ -115,18 +186,22 @@ def add_watermark(
     if overwriting_in_place:
         render_path = output_path.with_name(f".{output_path.stem}.watermark_tmp{output_path.suffix}")
 
-    vf = _build_drawtext_filter(text, font_file)
-    stream = (
-        ffmpeg
-        .input(str(clip_path))
-        .output(
-            str(render_path),
-            vf=vf,
-            **{"c:v": "libx264", "preset": "veryfast", "crf": 20, "pix_fmt": "yuv420p", "c:a": "copy"},
-        )
-        .overwrite_output()
-    )
-    run_ffmpeg(stream)
+    logo_w = _logo_scaled_width(logo_path, LOGO_HEIGHT_PX)
+    filter_complex = _build_filter_complex(text, logo_w, LOGO_HEIGHT_PX, font_file)
+
+    args = [
+        "ffmpeg", "-y",
+        "-i", str(clip_path),
+        "-loop", "1", "-i", str(logo_path),
+        "-filter_complex", filter_complex,
+        "-map", "[out]",
+        "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        "-shortest",
+        str(render_path),
+    ]
+    run_ffmpeg_command(args)
 
     if overwriting_in_place:
         os.replace(render_path, output_path)
@@ -137,11 +212,33 @@ def add_watermark(
 def process_folder(
     folder: Path,
     text: str = WATERMARK_TEXT,
+    logo_path: Path = DEFAULT_LOGO_PATH,
     font_file: str | None = None,
     overwrite: bool = False,
+    limit: int | None = None,
 ) -> list[Path]:
-    """Aplica el watermark a todos los .mp4 de `folder` (no recursivo)."""
+    """Aplica el watermark a los .mp4 de `folder` (no recursivo).
+
+    `limit`, si se pasa, procesa solo los primeros N clips (util para
+    probar en un clip real antes de correr el batch completo).
+    """
     folder = Path(folder)
+    logo_path = Path(logo_path)
+    if not logo_path.exists():
+        raise FileNotFoundError(
+            f"No se encontro el logo en {logo_path}. Pasa --logo-file para usar otra ruta."
+        )
+
+    has_transparency = check_logo_transparency(logo_path)
+    if not has_transparency:
+        print(
+            f"AVISO: {logo_path} no parece tener transparencia real (canal alpha "
+            "ausente o siempre opaco). El logo se va a superponer con una caja de "
+            "fondo solida detras. Si no es lo que queres, conseguí un PNG con fondo "
+            "transparente antes de aplicar esto a todos los clips.",
+            flush=True,
+        )
+
     clips = sorted(
         p for p in folder.glob("*.mp4")
         if not p.stem.endswith("_wm") and not p.stem.startswith(".")
@@ -151,15 +248,19 @@ def process_folder(
         print(f"No se encontraron .mp4 en {folder}")
         return []
 
+    if limit is not None:
+        clips = clips[:limit]
+
     resolved_font = font_file or _find_font_file()
     print(f"Fuente usada para el watermark: {resolved_font or 'font=Sans (fontconfig, sin archivo especifico)'}")
+    print(f"Logo usado: {logo_path} (transparencia real: {'si' if has_transparency else 'NO'})")
 
     total = len(clips)
     results = []
     for i, clip_path in enumerate(clips, start=1):
         print(f"[{i}/{total}] Aplicando watermark a: {clip_path.name}", flush=True)
         output_path = clip_path if overwrite else None
-        result = add_watermark(clip_path, output_path=output_path, text=text, font_file=font_file)
+        result = add_watermark(clip_path, output_path=output_path, text=text, logo_path=logo_path, font_file=font_file)
         print(f"  -> {result.name}", flush=True)
         results.append(result)
 
@@ -169,25 +270,41 @@ def process_folder(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Quema un watermark de texto sobre todos los .mp4 de una carpeta "
+        description="Quema el logo de YouTube + texto sobre todos los .mp4 de una carpeta "
         "(clips ya generados, no reprocesa desde el video original)."
     )
     parser.add_argument("--folder", required=True, help="Carpeta con los .mp4 a marcar")
     parser.add_argument("--text", default=WATERMARK_TEXT, help=f"Texto del watermark (default: {WATERMARK_TEXT!r})")
+    parser.add_argument(
+        "--logo-file",
+        default=str(DEFAULT_LOGO_PATH),
+        help=f"Ruta al PNG del logo a superponer (default: {DEFAULT_LOGO_PATH})",
+    )
     parser.add_argument("--font-file", help="Ruta a un archivo de fuente .ttf/.otf a usar (override de la autodeteccion)")
     parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Sobreescribe el .mp4 original en vez de generar una copia con sufijo _wm (mas riesgoso: sin esto no se toca el original)",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        help="Procesa solo los primeros N .mp4 de la carpeta (para probar en 1 clip antes del batch completo, ej. --limit 1)",
+    )
     args = parser.parse_args()
 
-    process_folder(
-        Path(args.folder),
-        text=args.text,
-        font_file=args.font_file,
-        overwrite=args.overwrite,
-    )
+    try:
+        process_folder(
+            Path(args.folder),
+            text=args.text,
+            logo_path=Path(args.logo_file),
+            font_file=args.font_file,
+            overwrite=args.overwrite,
+            limit=args.limit,
+        )
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

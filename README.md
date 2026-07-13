@@ -26,7 +26,7 @@ clip-pipeline/
     vertical.py    # crop centrado a 9:16 (1080x1920)
     subtitles.py   # genera y quema el .ass de subtitulos karaoke
     naming.py      # sanitiza nombres de archivo/carpeta para que sean validos en Windows
-    watermark.py   # script independiente: quema un watermark de texto sobre clips ya generados
+    watermark.py   # script independiente: quema el logo + texto sobre clips ya generados
   notebooks/
     pipeline_colab.ipynb   # notebook para correr todo en Google Colab
   requirements.txt
@@ -113,16 +113,29 @@ en `metadata/<id>.json`, listo para que `src.clip` lo use la próxima vez.
 ### Watermark sobre clips ya generados
 
 `src/watermark.py` es un script aparte del pipeline: no reprocesa nada
-desde el video original, solo quema un texto pequeño y permanente
-("YT: ampeterby7" por defecto) en la esquina inferior derecha de clips
-`.mp4` que ya existen, con margen respecto al borde para no chocar con la
-UI de TikTok. Corre en batch sobre toda una carpeta:
+desde el video original, solo quema un watermark pequeño y permanente en
+la esquina inferior derecha de clips `.mp4` que ya existen, con margen
+respecto al borde para no chocar con la UI de TikTok. El watermark
+combina dos elementos, presentes de forma estática durante el 100% de la
+duración del clip (sin animación):
+
+- El logo de YouTube (`Youtube_logo.png` en la raíz del repo por
+  defecto), escalado a ~50px de alto manteniendo su proporción original,
+  superpuesto limpio gracias a su canal alpha (sin caja de fondo).
+- El texto `"ampeterby7"` (con contorno y sombra para leerse sobre
+  cualquier fondo) inmediatamente a la izquierda del logo, centrado
+  verticalmente con él.
+
+Corre en batch sobre toda una carpeta:
 
 ```bash
 python -m src.watermark --folder "output/<título del video>"
 
 # En Windows, sobre una carpeta de Google Drive Desktop:
 python -m src.watermark --folder "G:\Mi unidad\ZaleteClips\<carpeta del video>"
+
+# Para probar primero en un solo clip antes de correr el batch completo:
+python -m src.watermark --folder "output/<título del video>" --limit 1
 ```
 
 Por default genera una copia nueva `<nombre>_wm.mp4` junto a cada original
@@ -131,12 +144,14 @@ comando de nuevo. Para sobreescribir los originales en lugar de crear
 copias, agregá `--overwrite` (renderiza a un archivo temporal y recién
 reemplaza el original si ffmpeg termina bien, para no perder el clip si
 algo falla a mitad de camino). Otras opciones: `--text "..."` para cambiar
-el texto, `--font-file /ruta/a/fuente.ttf` si la autodetección de fuente
-(Arial en Windows, DejaVu/Liberation en Linux, Arial en macOS) no encuentra
-ninguna instalada en tu máquina.
+el texto, `--logo-file /ruta/a/logo.png` para usar otra imagen,
+`--font-file /ruta/a/fuente.ttf` si la autodetección de fuente (Arial en
+Windows, DejaVu/Liberation en Linux, Arial en macOS) no encuentra ninguna
+instalada en tu máquina.
 
-Por ahora es solo texto — si más adelante querés el logo real de YouTube
-superpuesto, se puede agregar un filtro `overlay` con un PNG.
+Al arrancar, el script chequea que el PNG del logo tenga transparencia
+real (no solo modo RGBA — también que existan píxeles con alpha < 255) y
+avisa si no la tiene, antes de aplicar el watermark a ningún clip.
 
 ## Formato vertical, división en partes y subtítulos
 

@@ -8,6 +8,7 @@ relanzar la excepcion si algo falla.
 """
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -22,6 +23,23 @@ def run(stream) -> None:
         print("ERROR de ffmpeg. stderr completo:", file=sys.stderr, flush=True)
         print(stderr, file=sys.stderr, flush=True)
         raise
+
+
+def run_command(args: list[str]) -> None:
+    """Corre un comando de ffmpeg armado a mano (lista de argv).
+
+    Para casos con multiples inputs y ``-map`` explicitos (ej. overlay de un
+    logo + drawtext + audio del input original) el DSL de ffmpeg-python no
+    expresa bien un ``-map`` repetido, asi que se arma el comando directo en
+    vez de forzarlo por ese DSL (mismo motivo que ``escape_filter_path``:
+    evitar el escapado automatico de ffmpeg-python).
+    """
+    result = subprocess.run(args, capture_output=True)
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace")
+        print("ERROR de ffmpeg. stderr completo:", file=sys.stderr, flush=True)
+        print(stderr, file=sys.stderr, flush=True)
+        raise RuntimeError(f"ffmpeg fallo (codigo {result.returncode})")
 
 
 def escape_filter_path(path: Path | str) -> str:
