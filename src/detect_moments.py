@@ -14,15 +14,19 @@ from src.config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MOMENTS_DIR
 PRICE_PER_MTOK_INPUT = 1.00
 PRICE_PER_MTOK_OUTPUT = 5.00
 
-MIN_CLIP_DURATION = 15.0
-MAX_CLIP_DURATION = 60.0
+# Rango absoluto que se valida en codigo (ver _enforce_duration). El prompt
+# pide ademas un rango preferente mas angosto dentro de este.
+MIN_CLIP_DURATION = 20.0
+MAX_CLIP_DURATION = 180.0
 
 SYSTEM_PROMPT = (
     "Sos un experto en clipping viral para TikTok con años de experiencia "
     "identificando los momentos de un video que mejor funcionan como clips "
-    "cortos. Analizas transcripciones con timestamps y detectas los "
-    "fragmentos con mayor potencial de viralidad. Devolves exclusivamente "
-    "JSON valido, sin texto adicional antes ni despues."
+    "cortos. Te especializas en contenido de futbol y gaming, donde los "
+    "mejores momentos suelen ser 'jugadas' con planteo, accion y remate, no "
+    "una sola frase suelta. Analizas transcripciones con timestamps y "
+    "detectas los fragmentos con mayor potencial de viralidad. Devolves "
+    "exclusivamente JSON valido, sin texto adicional antes ni despues."
 )
 
 USER_PROMPT_TEMPLATE = """\
@@ -36,31 +40,35 @@ clips virales de TikTok, evaluando estos criterios:
 - Momentos de humor
 - Controversia o opiniones polemicas
 - Cambios de tono marcados
-- Remates de historias con inicio y cierre claros
+- Remates de historias o jugadas con inicio y cierre claros
 
 Reglas estrictas:
-- Cada clip debe durar EXACTAMENTE entre 15 y 60 segundos (end - start). Nunca
-  generes un clip mas corto que 15s ni mas largo que 60s: si un momento fuerte
-  dura mas de 60s, recorta el rango a la parte con mas potencial.
-- Los momentos no pueden solaparse entre si: el "start" de un momento debe ser
-  mayor o igual al "end" del momento anterior.
-- Usa TODO el rango de 1 a 10 con criterio real y honesto, no infles los
-  scores. La mayoria del contenido normal deberia puntuar entre 5 y 7. Reserva
-  8 para momentos muy buenos. Reserva 9-10 unicamente para 1 o 2 momentos
-  verdaderamente excepcionales de todo el video, con potencial viral claro.
-  Si todo te parece un 7-9, estas siendo demasiado generoso: se mas estricto.
+- Duracion: el rango preferente y por defecto es 45-90 segundos (el contenido
+  es futbol/gaming con narrativa de "jugada" — necesita espacio para el
+  planteo, la accion y el remate). Usa 20-44 segundos SOLO para un momento
+  aislado muy potente que no necesita mas contexto (una frase o reaccion
+  puntual). Usa 91-180 segundos SOLO si una secuencia completa necesita todo
+  ese contexto para tener sentido (ej. una tanda de penaltis completa). Nunca
+  generes un clip de menos de 20s ni de mas de 180s.
+- Los momentos no pueden solaparse significativamente entre si.
+- Usa TODO el rango de 0 a 100 con criterio real y honesto, no infles los
+  scores. La mayoria del contenido normal deberia puntuar entre 50 y 70.
+  Reserva 80 para momentos muy buenos. Reserva 90-100 unicamente para 1 o 2
+  momentos verdaderamente excepcionales de todo el video, con potencial
+  viral claro. Si todo te parece 70-90, estas siendo demasiado generoso: se
+  mas estricto.
 
-Devolve TODOS los momentos que detectes con score >= 6, sin limitar la
+Devolve TODOS los momentos que detectes con score >= 60, sin limitar la
 cantidad.
 
 Devolve SOLO un array JSON con esta forma exacta, sin texto adicional:
 [
   {{
     "start": 45.2,
-    "end": 78.9,
+    "end": 112.4,
     "reason": "por que este momento tiene potencial",
     "hook_title": "texto corto para overlay en los primeros 2s",
-    "score": 8
+    "score": 72
   }}
 ]
 
@@ -100,18 +108,29 @@ def _enforce_duration(moments: list[dict]) -> list[dict]:
     return validated
 
 
-def _remove_overlaps(moments: list[dict]) -> list[dict]:
-    """Ordena por 'start' y, ante solapamientos, descarta el de menor score."""
-    ordered = sorted(moments, key=lambda m: m["start"])
-    result: list[dict] = []
-    for moment in ordered:
-        if result and moment["start"] < result[-1]["end"]:
-            if moment.get("score", 0) > result[-1].get("score", 0):
-                result[-1] = moment
-            # si no supera el score del momento ya aceptado, se descarta
-        else:
-            result.append(moment)
-    return result
+def dedupe_highlights(highlights: list[dict]) -> list[dict]:
+    """Descarta un momento si solapa >50% con uno de mayor score ya aceptado.
+
+    Portado de dedupe_highlights() en SamurAIGPT/AI-Youtube-Shorts-Generator
+    (highlights.py), adaptado a nuestros nombres de campo (start/end/score).
+    """
+    highlights = sorted(highlights, key=lambda h: int(h.get("score", 0)), reverse=True)
+    kept: list[dict] = []
+    for h in highlights:
+        h_start = float(h["start"])
+        h_end = float(h["end"])
+        h_dur = h_end - h_start
+        overlapping = False
+        for k in kept:
+            latest_start = max(h_start, float(k["start"]))
+            earliest_end = min(h_end, float(k["end"]))
+            overlap = earliest_end - latest_start
+            if overlap > 0 and overlap > 0.5 * h_dur:
+                overlapping = True
+                break
+        if not overlapping:
+            kept.append(h)
+    return kept
 
 
 def find_moments(transcript_path: Path, output_dir: Path | None = None) -> tuple[Path, list[dict], anthropic.types.Usage]:
@@ -142,7 +161,8 @@ def find_moments(transcript_path: Path, output_dir: Path | None = None) -> tuple
 
     moments = _parse_moments(response_text)
     moments = _enforce_duration(moments)
-    moments = _remove_overlaps(moments)
+    moments = dedupe_highlights(moments)
+    moments.sort(key=lambda m: m["start"])
 
     output_path = target_dir / f"{transcript_path.stem}.json"
     output_path.write_text(json.dumps(moments, ensure_ascii=False, indent=2), encoding="utf-8")
