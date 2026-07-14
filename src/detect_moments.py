@@ -9,6 +9,7 @@ from pathlib import Path
 import anthropic
 
 from src.config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MOMENTS_DIR
+from src.content_types import get_content_type_prompt, list_content_types
 
 # Precio por millon de tokens de claude-haiku-4-5 (USD).
 PRICE_PER_MTOK_INPUT = 1.00
@@ -19,58 +20,72 @@ PRICE_PER_MTOK_OUTPUT = 5.00
 MIN_CLIP_DURATION = 20.0
 MAX_CLIP_DURATION = 180.0
 
-SYSTEM_PROMPT = (
-    "Sos un experto en clipping viral para TikTok con años de experiencia "
-    "identificando los momentos de un video que mejor funcionan como clips "
-    "cortos. Te especializas en contenido de futbol y gaming, donde los "
-    "mejores momentos suelen ser 'jugadas' con planteo, accion y remate, no "
-    "una sola frase suelta. Analizas transcripciones con timestamps y "
-    "detectas los fragmentos con mayor potencial de viralidad. Devolves "
-    "exclusivamente JSON valido, sin texto adicional antes ni despues."
-)
+# Prompt default cuando no se pasa --content-type: en vez de un unico
+# criterio generico, el modelo primero identifica internamente (sin decirlo
+# en la respuesta) a cual de estas 4 categorias pertenece el transcript y
+# aplica el criterio de seleccion correspondiente, en una sola llamada. El
+# caso "narrativo de un solo streamer" reusa el criterio generico original
+# de este pipeline (el que habia antes de agregar tipos de contenido).
+AUTO_CLASSIFY_SYSTEM_PROMPT = """\
+Sos un editor experto en clipping viral para YouTube Shorts, TikTok y \
+Reels. Antes de elegir los momentos, identifica internamente (sin decirlo \
+en la respuesta) a cual de estas 4 categorias pertenece el transcript, y \
+aplica el criterio de seleccion que corresponda:
+
+SI ES ENTRETENIMIENTO CON INVITADOS (formato Ibai, Sidemen, retos, \
+"adivina quien", debates, dinamicas sociales entre varias personas):
+Busca tension social, respuestas incomodas, humor espontaneo, caos entre \
+invitados, acusaciones, sospechas, reveals, giros, verguenza. Mini-historia \
+setup->tension->payoff. El clip debe empezar con hook inmediato (pregunta, \
+acusacion, reaccion) y cerrar con sensacion de resolucion. Evita empezar \
+con saludos o reglas explicadas sin tension.
+
+SI ES VIAJE/AVENTURA (pais, presupuesto, hoteles, comida local, choque \
+cultural):
+Busca hook de curiosidad inmediata ("Estamos en el pais mas caro..."), \
+choque cultural ("¿Como que eso cuesta tanto?"), precio como tension \
+narrativa, problemas del viaje (hotel malo, tormenta, presupuesto \
+agotado), momentos visualmente potentes aunque no tengan gran frase, y \
+reflexion final con payoff emocional.
+
+SI ES PODCAST/ENTREVISTA (una persona entrevistando a otra, sin dinamica \
+de grupo ni componente de viaje):
+Se agresivo seleccionando - preferi pocos clips excelentes. Hook inmediato \
+con frase de curiosidad/shock. Historia completa con inicio-desarrollo- \
+cierre entendible sin contexto previo. Tension progresiva (cada frase mas \
+fuerte que la anterior). Prioriza miedo, dolor, humillacion, \
+supervivencia, presion psicologica, traicion, orgullo, dilemas morales. \
+Empeza el clip desde la frase mas potente del entrevistado, no \
+necesariamente desde la pregunta.
+
+SI ES NARRATIVO DE UN SOLO STREAMER (sin invitados, sin viaje, sin \
+formato entrevista - ej. gaming, futbol, reaccion en solitario):
+Busca ganchos fuertes (frases que enganchan en los primeros segundos), \
+punchlines y remates comicos, datos o afirmaciones sorprendentes, \
+momentos de humor, controversia u opiniones polemicas, cambios de tono \
+marcados, remates de historias o jugadas con inicio y cierre claros.
+
+EN TODOS LOS CASOS:
+- Duracion: nunca generes un clip de menos de 20s ni de mas de 180s. El \
+rango preferente es 45-90s; usa 20-44s solo para un momento aislado muy \
+potente, y 91-180s solo si una secuencia completa necesita todo ese \
+contexto para tener sentido.
+- Los momentos no pueden solaparse significativamente entre si.
+- No inventes timestamps ni dialogo que no este en el transcript.
+- Usa TODO el rango de 0 a 100 con criterio real y honesto: la mayoria del \
+contenido normal deberia puntuar entre 50 y 70, reserva 90-100 \
+unicamente para 1 o 2 momentos verdaderamente excepcionales.
+
+Devuelve SOLO un array JSON, sin texto adicional antes ni despues, con \
+este esquema exacto:
+[{"start": segundos_float, "end": segundos_float, "hook_title": "titulo \
+corto y viral", "reason": "por que funciona en 1 linea", "score": 0-100}]
+"""
 
 USER_PROMPT_TEMPLATE = """\
 A continuacion esta la transcripcion de un video, segmentada con timestamps
 en segundos. Identifica TODOS los momentos con potencial para convertirse en
-clips virales de TikTok, evaluando estos criterios:
-
-- Ganchos fuertes (frases que enganchan en los primeros segundos)
-- Punchlines y remates comicos
-- Datos o afirmaciones sorprendentes
-- Momentos de humor
-- Controversia o opiniones polemicas
-- Cambios de tono marcados
-- Remates de historias o jugadas con inicio y cierre claros
-
-Reglas estrictas:
-- Duracion: el rango preferente y por defecto es 45-90 segundos (el contenido
-  es futbol/gaming con narrativa de "jugada" — necesita espacio para el
-  planteo, la accion y el remate). Usa 20-44 segundos SOLO para un momento
-  aislado muy potente que no necesita mas contexto (una frase o reaccion
-  puntual). Usa 91-180 segundos SOLO si una secuencia completa necesita todo
-  ese contexto para tener sentido (ej. una tanda de penaltis completa). Nunca
-  generes un clip de menos de 20s ni de mas de 180s.
-- Los momentos no pueden solaparse significativamente entre si.
-- Usa TODO el rango de 0 a 100 con criterio real y honesto, no infles los
-  scores. La mayoria del contenido normal deberia puntuar entre 50 y 70.
-  Reserva 80 para momentos muy buenos. Reserva 90-100 unicamente para 1 o 2
-  momentos verdaderamente excepcionales de todo el video, con potencial
-  viral claro. Si todo te parece 70-90, estas siendo demasiado generoso: se
-  mas estricto.
-
-Devolve TODOS los momentos que detectes con score >= 60, sin limitar la
-cantidad.
-
-Devolve SOLO un array JSON con esta forma exacta, sin texto adicional:
-[
-  {{
-    "start": 45.2,
-    "end": 112.4,
-    "reason": "por que este momento tiene potencial",
-    "hook_title": "texto corto para overlay en los primeros 2s",
-    "score": 72
-  }}
-]
+clips virales, aplicando el criterio de seleccion indicado.
 
 Transcripcion:
 {transcript_text}
@@ -242,11 +257,27 @@ def dedupe_highlights(highlights: list[dict]) -> list[dict]:
     return kept
 
 
-def find_moments(transcript_path: Path, output_dir: Path | None = None) -> tuple[Path, list[dict], anthropic.types.Usage]:
-    """Analiza un transcript JSON y guarda los momentos detectados como JSON."""
+def find_moments(
+    transcript_path: Path,
+    output_dir: Path | None = None,
+    content_type: str | None = None,
+) -> tuple[Path, list[dict], anthropic.types.Usage]:
+    """Analiza un transcript JSON y guarda los momentos detectados como JSON.
+
+    `content_type` (ej. "invitado", "viajes", "podcast" - ver prompts/ y
+    --list-content-types) fuerza el criterio de seleccion de ese archivo de
+    prompt. Sin `content_type`, se usa AUTO_CLASSIFY_SYSTEM_PROMPT: el
+    modelo identifica solo, en la misma llamada, a que tipo de contenido
+    pertenece el transcript y aplica el criterio correspondiente - no hace
+    falta indicarlo a mano.
+    """
     transcript_path = Path(transcript_path)
     target_dir = output_dir or MOMENTS_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resolver el prompt ANTES de leer/mandar nada: si el content_type no
+    # existe, mejor fallar de una con un mensaje claro.
+    system_prompt = get_content_type_prompt(content_type) if content_type else AUTO_CLASSIFY_SYSTEM_PROMPT
 
     transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
     transcript_text = _build_transcript_text(transcript["segments"])
@@ -255,7 +286,7 @@ def find_moments(transcript_path: Path, output_dir: Path | None = None) -> tuple
     message = client.messages.create(
         model=ANTHROPIC_MODEL,
         max_tokens=8192,
-        system=SYSTEM_PROMPT,
+        system=system_prompt,
         messages=[
             {
                 "role": "user",
@@ -284,10 +315,30 @@ detect_moments = find_moments
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Detecta momentos virales en un transcript")
-    parser.add_argument("--transcript", required=True, help="Ruta al transcript JSON (de transcribe.py)")
+    parser.add_argument("--transcript", help="Ruta al transcript JSON (de transcribe.py)")
+    parser.add_argument(
+        "--content-type",
+        help="Fuerza el criterio de seleccion de prompts/<nombre>.txt (ver --list-content-types). "
+        "Sin esto, el modelo clasifica el transcript solo entre esos mismos criterios.",
+    )
+    parser.add_argument(
+        "--list-content-types",
+        action="store_true",
+        help="Lista los tipos de contenido disponibles (prompts/*.txt) y termina.",
+    )
     args = parser.parse_args()
 
-    output_path, moments, usage = find_moments(Path(args.transcript))
+    if args.list_content_types:
+        list_content_types()
+        return
+
+    if not args.transcript:
+        parser.error("--transcript es requerido (salvo con --list-content-types)")
+
+    try:
+        output_path, moments, usage = find_moments(Path(args.transcript), content_type=args.content_type)
+    except ValueError as e:
+        parser.error(str(e))
 
     cost = (
         usage.input_tokens * PRICE_PER_MTOK_INPUT / 1_000_000

@@ -2,10 +2,13 @@
 
 No duplica logica de negocio: solo arma la interfaz y llama a las mismas
 funciones de src/ que usan los scripts de linea de comandos
-(src.pipeline.run_pipeline, src.campaigns.get_all_campaigns, etc.). Los
-prints ya existentes en cada modulo (descarga, transcripcion, deteccion de
-momentos, generacion de clips) se capturan tal cual via redireccion de
-stdout, sin rehacer el logging.
+(src.pipeline.run_pipeline, src.content_types.list_available_content_types,
+etc.). Los prints ya existentes en cada modulo (descarga, transcripcion,
+deteccion de momentos, generacion de clips) se capturan tal cual via
+redireccion de stdout, sin rehacer el logging.
+
+Sin marca de agua: este pipeline no aplica watermark (ver src/watermark.py
+para eso, aparte, sobre clips ya generados).
 
 Lanzar con: streamlit run app.py (ver README, seccion "Interfaz web").
 """
@@ -17,16 +20,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from src.campaigns import describe_campaign, get_all_campaigns
 from src.config import INPUT_DIR
+from src.content_types import get_content_type_prompt, list_available_content_types
 from src.ffmpeg_utils import probe_duration
 from src.pipeline import run_pipeline
 from src.video_filters import FILTER_LABELS
-from src.watermark import DEFAULT_CTA_TEXT
 
 st.set_page_config(page_title="Clip Pipeline", page_icon="🎬", layout="wide")
 
-NO_CAMPAIGN_LABEL = "Sin campaña / sin marca de agua"
+AUTO_CONTENT_TYPE_LABEL = "Automático (el modelo clasifica solo)"
 NO_FILTER_LABEL = "Ningún filtro"
 
 
@@ -59,11 +61,11 @@ class _LiveLogWriter:
         pass
 
 
-def _campaign_options() -> dict[str, str | None]:
-    """label visible -> campaign_id ("1", "2", ...) o None para "sin campaña"."""
-    options: dict[str, str | None] = {NO_CAMPAIGN_LABEL: None}
-    for cid, campaign in get_all_campaigns().items():
-        options[f"{cid} - {campaign.name}"] = cid
+def _content_type_options() -> dict[str, str | None]:
+    """label visible -> content_type ("invitado", ...) o None para "automatico"."""
+    options: dict[str, str | None] = {AUTO_CONTENT_TYPE_LABEL: None}
+    for content_type in list_available_content_types():
+        options[content_type] = content_type
     return options
 
 
@@ -100,14 +102,22 @@ def _format_duration(seconds: float | None) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def _render_campaigns_tab() -> None:
-    campaigns = get_all_campaigns()
-    if not campaigns:
-        st.info("No hay campañas definidas en campaigns.json.")
+def _render_content_types_tab() -> None:
+    content_types = list_available_content_types()
+    if not content_types:
+        st.info("No hay tipos de contenido definidos en prompts/.")
         return
-    for cid, campaign in campaigns.items():
-        st.markdown(f"**{cid} — {campaign.name}**")
-        st.write(describe_campaign(campaign))
+    st.write(
+        "Sin elegir uno (modo automático), el modelo clasifica el transcript solo "
+        "entre estos mismos criterios más uno genérico para streamers sin invitados."
+    )
+    for content_type in content_types:
+        prompt_text = get_content_type_prompt(content_type)
+        first_line = prompt_text.strip().splitlines()[0]
+        st.markdown(f"**{content_type}**")
+        st.write(first_line)
+        with st.expander("Ver prompt completo"):
+            st.text(prompt_text)
         st.divider()
 
 
@@ -115,11 +125,10 @@ def _run_and_render(
     *,
     url: str | None,
     file_path: str | None,
-    campaign_id: str | None,
+    content_type: str | None,
     video_title: str | None,
     max_clips: int | None,
     video_filter: str | None,
-    cta_text: str | None,
 ) -> None:
     log_placeholder = st.empty()
     with st.status("Procesando…", expanded=True) as status_box:
@@ -129,11 +138,10 @@ def _run_and_render(
                 clip_paths = run_pipeline(
                     url=url,
                     file=file_path,
-                    campaign=campaign_id,
+                    content_type=content_type,
                     video_title_override=video_title or None,
                     max_clips=max_clips,
                     video_filter=video_filter,
-                    cta_text=cta_text,
                 )
         except Exception as e:
             status_box.update(label="Falló", state="error")
@@ -169,26 +177,23 @@ def _render_main_tab() -> None:
     else:
         uploaded_file = st.file_uploader("Archivo de video", type=["mp4", "mkv", "mov", "webm"])
 
-    campaign_options = _campaign_options()
-    campaign_label = st.selectbox("Campaña", list(campaign_options.keys()))
-    campaign_id = campaign_options[campaign_label]
+    content_type_options = _content_type_options()
+    content_type_label = st.selectbox(
+        "Tipo de contenido",
+        list(content_type_options.keys()),
+        help="Fuerza el criterio de selección de momentos. En modo automático, el "
+        "modelo detecta solo si es entretenimiento con invitados, viaje, podcast o "
+        "narrativo de un streamer, sin que tengas que indicarlo.",
+    )
+    content_type = content_type_options[content_type_label]
 
     filter_options = _filter_options()
     filter_label = st.selectbox(
         "Filtro de video",
         list(filter_options.keys()),
-        help="Se aplica sobre todo el clip antes de los subtítulos y la marca de agua.",
+        help="Se aplica sobre todo el clip antes de los subtítulos.",
     )
     video_filter = filter_options[filter_label]
-
-    show_cta = st.checkbox(
-        "Agregar mensaje arriba del logo (ej. \"Puedes ver el video completo en\")",
-        help="Mensaje chico, en un par de líneas, para redirigir al público. Solo tiene "
-        "efecto si elegiste una campaña (necesita el logo+nombre de canal debajo).",
-    )
-    cta_text = None
-    if show_cta:
-        cta_text = st.text_input("Texto del mensaje", value=DEFAULT_CTA_TEXT)
 
     video_title = st.text_input(
         "Nombre del video (opcional)",
@@ -203,7 +208,7 @@ def _render_main_tab() -> None:
         step=1,
         value=None,
         help="Si lo completás, se procesan solo los N momentos de mayor score (el resto "
-        "se descarta antes de generar nada, ahorrando tiempo de ffmpeg/watermark). "
+        "se descarta antes de generar nada, ahorrando tiempo de ffmpeg). "
         "Vacío = sin límite. Un momento largo dividido en PARTE 1/PARTE 2 cuenta como uno solo.",
     )
 
@@ -219,21 +224,20 @@ def _render_main_tab() -> None:
     _run_and_render(
         url=(url or None) if uploaded_file is None else None,
         file_path=file_path,
-        campaign_id=campaign_id,
+        content_type=content_type,
         video_title=video_title,
         max_clips=int(max_clips) if max_clips else None,
         video_filter=video_filter,
-        cta_text=(cta_text or None) if show_cta else None,
     )
 
 
 def main() -> None:
     st.title("🎬 Clip Pipeline")
-    tab_main, tab_campaigns = st.tabs(["Generar clips", "Campañas"])
+    tab_main, tab_content_types = st.tabs(["Generar clips", "Tipos de contenido"])
     with tab_main:
         _render_main_tab()
-    with tab_campaigns:
-        _render_campaigns_tab()
+    with tab_content_types:
+        _render_content_types_tab()
 
 
 main()

@@ -2,10 +2,14 @@
 
 Pipeline para convertir VODs largos en clips cortos listos para TikTok:
 descarga el video, lo transcribe con Whisper (con timestamps por palabra),
-detecta los mejores momentos con Claude (Anthropic) y genera los clips
-finales en formato vertical 9:16 con subtítulos karaoke quemados. Los
-momentos largos (>90s) se dividen automáticamente en varias partes con un
-aviso de cliffhanger al final de cada una.
+detecta los mejores momentos con Claude (Anthropic) — clasificando solo el
+tipo de contenido (invitados, viaje, podcast, narrativo de streamer) para
+aplicar el criterio de selección correcto, sin que haga falta indicarlo — y
+genera los clips finales en formato vertical 9:16 con subtítulos karaoke
+quemados. Los momentos largos (>90s) se dividen automáticamente en varias
+partes con un aviso de cliffhanger al final de cada una. Pensado para
+correr con un solo comando de punta a punta (ej. `python -m src.pipeline
+--file input/video.mp4`) sin marca de agua ni pasos intermedios.
 
 El código en `src/` es agnóstico del entorno: no tiene rutas hardcodeadas
 de Google Colab (`/content/...`). Todas las rutas son relativas a la raíz
@@ -21,24 +25,29 @@ clip-pipeline/
   moments/        # JSON de momentos detectados por Claude
   metadata/       # id/titulo/etc. de cada VOD descargado (ignorado por git)
   output/         # clips finales por defecto (ignorado por git; configurable con OUTPUT_DIR)
-  campaigns.json  # perfiles de campaña: marca de agua + split + estilo de subtitulos
+  prompts/        # system prompts por tipo de contenido (invitado.txt, viajes.txt, podcast.txt)
   app.py          # interfaz web (Streamlit) - reutiliza las funciones de src/, no duplica logica
   src/            # código del pipeline
-    clip.py        # orquesta: division en partes -> crop vertical -> filtro -> subtitulos -> watermark
+    clip.py        # orquesta: division en partes -> crop vertical -> filtro -> subtitulos
     vertical.py    # crop centrado a 9:16 (1080x1920)
     video_filters.py  # filtros visuales opcionales (espejo, vintage, TV a rayas, etc.)
     subtitles.py   # genera y quema el .ass de subtitulos karaoke
     naming.py      # sanitiza nombres de archivo/carpeta para que sean validos en Windows
-    watermark.py   # quema el logo + texto sobre un clip (funcion compartida + script independiente)
-    watermarks.py  # registro de marcas de agua conocidas por nombre (texto + logo)
-    campaigns.py   # carga campaigns.json: perfiles de campaña por numero
-    add_campaign.py  # crea campañas "estandar" en campaigns.json sin editarlo a mano
-    detect_moments.py  # deteccion de momentos + recorte a sub-segmento via LLM (campañas sin split)
+    detect_moments.py  # deteccion de momentos: clasifica el tipo de contenido y aplica su criterio
+    content_types.py   # carga prompts/*.txt por tipo de contenido
+    watermark.py   # script independiente: quema logo+texto sobre clips ya generados (no forma parte del pipeline)
   notebooks/
     pipeline_colab.ipynb   # notebook para correr todo en Google Colab
   requirements.txt
   .env.example
 ```
+
+`campaigns.json`, `src/campaigns.py`, `src/watermarks.py` y `src/add_campaign.py`
+siguen existiendo en el repo (de una iteración anterior donde el pipeline sí
+aplicaba marca de agua por campaña) pero **ya no los usa** `src.pipeline` ni
+`src.clip` — el pipeline actual nunca aplica watermark. Quedan ahí por si en
+el futuro se vuelve a necesitar esa integración; `src/watermark.py` (marca de
+agua manual sobre clips ya generados) sigue siendo independiente de todo esto.
 
 ## Setup local / VPS
 
@@ -57,8 +66,9 @@ cp .env.example .env
 
 Para no depender de la terminal, `app.py` (Streamlit) da una pantalla
 simple para generar clips. Es solo una interfaz: no reimplementa nada,
-llama directo a `src.pipeline.run_pipeline()`, `src.campaigns.get_all_campaigns()`,
-etc. — las mismas funciones que usan los comandos de línea de arriba.
+llama directo a `src.pipeline.run_pipeline()`,
+`src.content_types.list_available_content_types()`, etc. — las mismas
+funciones que usan los comandos de línea de arriba.
 
 ```bash
 streamlit run app.py
@@ -72,24 +82,21 @@ La pantalla principal ("Generar clips") tiene:
 
 - **Origen del video**: una URL de YouTube o un archivo para subir (uno de
   los dos, no ambos a la vez — la interfaz avisa si falta o sobra alguno).
-- **Campaña**: dropdown cargado directo desde `campaigns.json` (misma
-  función que usa `--list-campaigns`), con "Sin campaña / sin marca de
-  agua" como primera opción.
+- **Tipo de contenido**: dropdown con "Automático (el modelo clasifica
+  solo)" como primera opción, y los tipos de `prompts/*.txt` debajo para
+  forzar uno a mano (ver "Tipos de contenido" más abajo).
 - **Filtro de video** (opcional): espejo, vintage, TV a rayas, blanco y
   negro o cinemático (ver `--filter` más abajo), con "Ningún filtro" como
   primera opción.
-- **Mensaje arriba del logo** (opcional, casilla + campo de texto): agrega
-  un CTA chico de un par de líneas arriba del logo+nombre de canal (ver
-  `--cta-text` más abajo). Solo tiene efecto si elegiste una campaña.
 - **Nombre del video** (opcional): si lo completás, se usa como nombre de
   la carpeta de salida en vez del título automático de yt-dlp.
 - **Máximo de clips** (opcional, vacío = sin límite): si lo completás, se
   procesan solo los N momentos de mayor score (ver `--max-clips` más abajo).
 - Botón **Generar clips**: corre el pipeline completo (descarga →
-  transcripción → detección de momentos → generación de clips con la
-  config de la campaña elegida) y muestra el progreso en vivo — es el
-  mismo texto que ya imprime cada paso por consola, capturado y volcado a
-  la interfaz a medida que llega, sin rehacer el logging.
+  transcripción → detección de momentos → generación de clips) y muestra
+  el progreso en vivo — es el mismo texto que ya imprime cada paso por
+  consola, capturado y volcado a la interfaz a medida que llega, sin
+  rehacer el logging. Los clips salen siempre sin marca de agua.
 
 Al terminar, lista cada clip generado con su nombre y duración (vía
 `ffprobe`) y la carpeta final donde quedaron. Si algo falla en cualquier
@@ -97,23 +104,19 @@ paso (descarga, transcripción, API de Claude, ffmpeg), el error se
 muestra en la interfaz con el traceback completo, sin que la app se
 cierre — podés corregir y volver a intentar sin reiniciar nada.
 
-La pestaña **Campañas** lista las campañas configuradas en
-`campaigns.json`, igual que `--list-campaigns` pero en la interfaz.
+La pestaña **Tipos de contenido** lista los prompts disponibles en
+`prompts/`, con el rol de cada uno y el prompt completo en un desplegable.
 
 ## Uso
 
 ```bash
-# a partir de una URL (yt-dlp)
+# el caso simple: un solo comando, todo automatico, sin marca de agua
+python -m src.pipeline --file input/mi_video.mp4
 python -m src.pipeline --url "https://..."
 
-# a partir de un archivo ya descargado en input/
-python -m src.pipeline --file input/mi_video.mp4
-
-# aplicando una marca de agua suelta (ver "Marca de agua" mas abajo) en la misma corrida
-python -m src.pipeline --url "https://..." --watermark ampeter
-
-# o un perfil de campaña completo (marca + split + subtitulos, ver "Campañas" mas abajo)
-python -m src.pipeline --url "https://..." --campaign 2
+# forzando el tipo de contenido en vez de dejar que el modelo clasifique solo
+# (ver "Tipos de contenido" mas abajo)
+python -m src.pipeline --url "https://..." --content-type invitado
 
 # forzando el nombre de la carpeta de salida en vez del titulo automatico de yt-dlp
 python -m src.pipeline --url "https://..." --video-title "Nombre que yo elijo"
@@ -123,20 +126,16 @@ python -m src.pipeline --url "https://..." --max-clips 3
 
 # aplicando un filtro visual a todo el clip (ver "Filtros de video" mas abajo)
 python -m src.pipeline --url "https://..." --filter vintage
-
-# agregando un mensaje chico arriba del logo (requiere --watermark o --campaign)
-python -m src.pipeline --url "https://..." --campaign 1 --cta-text
 ```
 
 `--max-clips N` se aplica a **momentos**, no a archivos finales: los
 momentos detectados se ordenan por score descendente y se descartan todos
-salvo los N mejores ANTES de generar nada (no se gasta tiempo de
-ffmpeg/watermark en los que no se van a usar). Si uno de los N momentos
-elegidos es largo y se divide en varias partes (`PARTE 1`/`PARTE 2`, ver
-más abajo), esas partes cuentan como un solo momento para el límite —
-podés terminar con más de N archivos `.mp4` en total, pero siempre de
-como mucho N momentos distintos. Sin `--max-clips`, sin límite (como
-hasta ahora).
+salvo los N mejores ANTES de generar nada (no se gasta tiempo de ffmpeg en
+los que no se van a usar). Si uno de los N momentos elegidos es largo y se
+divide en varias partes (`PARTE 1`/`PARTE 2`, ver más abajo), esas partes
+cuentan como un solo momento para el límite — podés terminar con más de N
+archivos `.mp4` en total, pero siempre de como mucho N momentos distintos.
+Sin `--max-clips`, sin límite (como hasta ahora).
 
 Esto genera:
 1. `input/<id>.mp4` (si se usó `--url`)
@@ -171,9 +170,11 @@ actualizar `src/clip.py`), podés regenerar solo los clips finales:
 python -m src.clip \
   --video input/<video>.mp4 \
   --moments moments/<video>.json \
-  --transcript transcripts/<video>.json \
-  --watermark ampeter   # opcional, ver "Marca de agua" mas abajo
+  --transcript transcripts/<video>.json
 ```
+
+(`src.clip` no llama a `src.detect_moments`, así que no tiene `--content-type`
+— ese flag solo aplica en `src.pipeline`, que es el que detecta los momentos.)
 
 `--transcript` es opcional: sin él se sigue aplicando el crop vertical y la
 división en partes, pero sin subtítulos. Si el transcript es de antes de
@@ -193,48 +194,23 @@ python -m src.download --url "https://www.youtube.com/watch?v=<id>" --metadata-o
 Esto solo pide el título a yt-dlp (no descarga video ni audio) y lo guarda
 en `metadata/<id>.json`, listo para que `src.clip` lo use la próxima vez.
 
-### Marca de agua
+### Marca de agua (opcional, aparte del pipeline)
 
-El watermark combina dos elementos, presentes de forma estática durante
-el 100% de la duración del clip (sin animación), en la esquina inferior
-derecha con margen respecto al borde para no chocar con la UI de TikTok:
+El pipeline (`src.pipeline`/`src.clip`) **nunca** aplica marca de agua —
+los clips siempre salen limpios. Si en algún momento querés marcarlos,
+`src/watermark.py` es un script aparte que opera sobre clips **ya
+generados**, sin volver a correr el pipeline ni tocar nada de lo de
+arriba. El watermark combina dos elementos, presentes de forma estática
+durante el 100% de la duración del clip (sin animación), en la esquina
+inferior derecha con margen respecto al borde para no chocar con la UI
+de TikTok:
 
 - Un logo (PNG con transparencia), escalado a ~50px de alto manteniendo
   su proporción original.
 - Un texto (con contorno y sombra para leerse sobre cualquier fondo)
   inmediatamente a la izquierda del logo, centrado verticalmente con él.
 
-La lógica de quemado vive en una sola función (`add_watermark()` en
-`src/watermark.py`) usada por dos caminos distintos, según cuándo la
-necesites:
-
-**1. En la misma corrida que genera los clips** (`src/clip.py` /
-`src/pipeline.py`), con `--watermark <nombre>`: cada clip final se marca
-apenas se termina de generar (vertical + subtítulos + marca, todo en un
-solo paso), sin producir primero una versión limpia:
-
-```bash
-python -m src.clip --video ... --moments ... --transcript ... --watermark ampeter
-python -m src.pipeline --url "..." --watermark ampeter
-```
-
-Sin `--watermark`, el comportamiento es el de siempre: clips sin marca,
-sin preguntar nada. `--list-watermarks` (en ambos comandos) imprime las
-marcas disponibles sin generar nada:
-
-```bash
-python -m src.clip --list-watermarks
-```
-
-Las marcas se definen en `src/watermarks.py` (diccionario `WATERMARKS`,
-nombre -> `{"text": ..., "logo": ...}`); agregar una marca nueva para otra
-campaña es agregar una entrada ahí, sin tocar el resto del código. Un
-nombre de marca que no existe falla con un mensaje claro listando las
-marcas válidas, antes de generar ningún clip.
-
-**2. Sobre clips ya generados, sin regenerar nada** (`src/watermark.py`
-como script aparte): útil si ya tenés una carpeta de clips limpios y
-querés marcarlos después. Corre en batch sobre toda una carpeta:
+Corre en batch sobre toda una carpeta de clips ya generados:
 
 ```bash
 python -m src.watermark --folder "output/<título del video>"
@@ -274,83 +250,22 @@ python -m src.watermark --folder "output/<título>" --cta-text
 python -m src.watermark --folder "output/<título>" --cta-text "Mirá el video completo en"
 ```
 
-Sin `--cta-text`, no se agrega nada (como hasta ahora). Como el CTA se
-dibuja arriba del logo+canal, solo tiene sentido si hay watermark: en
-`src.clip`/`src.pipeline` (ver más abajo) se ignora con un aviso si se
-pasa sin `--watermark` ni `--campaign`.
+Sin `--cta-text`, no se agrega nada (como hasta ahora).
 
-### Campañas
-
-Cada campaña de clipping puede tener su propia marca de agua, su propia
-regla de división en partes y su propio estilo de subtítulos. En vez de
-combinar `--watermark`, `--no-split` y `--subtitle-style` sueltos cada
-vez, `--campaign <numero>` carga los tres de una:
-
-```bash
-python -m src.pipeline --url "..." --campaign 2
-python -m src.clip --video ... --moments ... --transcript ... --campaign 1
-python -m src.clip --list-campaigns
-```
-
-Los perfiles se definen en `campaigns.json` (raíz del repo), un objeto con
-un bloque por campaña indexado por su ID numérico:
-
-```json
-{
-  "1": {
-    "name": "Ampeter",
-    "watermark": {"text": "ampeterby7", "logo": "Youtube_logo.png"},
-    "allow_split": true,
-    "subtitle_style": {"text_color": "white", "font_candidates": ["DejaVu Sans"]}
-  },
-  "2": {
-    "name": "Luis Luceo",
-    "watermark": {"text": "@luisluceo", "logo": "Youtube_logo.png"},
-    "allow_split": false,
-    "subtitle_style": {"text_color": "yellow", "font_candidates": ["Sora", "Poppins", "Montserrat", "DejaVu Sans"]}
-  }
-}
-```
-
-Agregar una campaña nueva es agregar un bloque con el siguiente número
-ahí — no hace falta tocar código en ningún otro archivo. `logo` es
-relativo a la raíz del repo. `font_candidates` es una lista de nombres de
-familia tipográfica en orden de preferencia: `src.subtitles.resolve_subtitle_font()`
-usa `fc-list` para elegir la primera que esté instalada en la máquina
-donde corre el pipeline, y avisa por consola cuál usó si la preferida (ej.
-"Sora") no está disponible y cayó a un fallback.
-
-`--campaign` y `--watermark` son mutuamente excluyentes (`--campaign` ya
-incluye su propia marca). Sin `--campaign` ni `--watermark`, el
-comportamiento es el de siempre: sin marca, división en partes permitida,
-subtítulos blancos.
-
-**`allow_split: false`** (campaña "Luis Luceo"): un momento de más de 90s
-normalmente se divide en "PARTE 1"/"PARTE 2" con cliffhanger. Si la
-campaña no permite eso, en cambio se le pide a Claude
-(`src.detect_moments.shrink_moment_to_subsegment`) que elija un único
-sub-segmento autocontenido de 20-90s dentro del momento — con inicio y
-remate propios, sin necesitar el resto para tener sentido. Si Claude
-determina que ningún sub-segmento de esa duración funciona solo, el
-momento se descarta (se imprime por qué). Esto requiere `--transcript`;
-sin transcript no hay texto que darle a Claude para elegir el
-sub-segmento, así que el momento también se descarta.
-
-Un ID de campaña que no existe falla con un mensaje claro listando los
-IDs y nombres válidos, antes de generar ningún clip (o, en
-`src.pipeline`, antes de descargar/transcribir nada).
-
-Un bloque de campaña también puede tener un `"video_filter"` opcional (ver
-"Filtros de video" más abajo) — se usa como filtro por default de esa
-campaña; un `--filter` explícito al generar clips gana sobre el de la
-campaña.
+> **Nota:** `campaigns.json`, `src/campaigns.py` y `src/add_campaign.py`
+> (perfiles con marca + `allow_split` + estilo de subtítulos por campaña,
+> con un ID numérico) quedan en el repo de una iteración anterior, pero
+> `src.pipeline`/`src.clip` ya no los usan — el pipeline actual nunca aplica
+> marca de agua ni varía el estilo de subtítulos por campaña. Si en el
+> futuro hace falta esa integración de nuevo, esos archivos siguen ahí como
+> punto de partida.
 
 ### Filtros de video
 
 `--filter <nombre>` aplica un filtro visual sobre todo el clip. Se aplica
-DESPUÉS del crop vertical pero ANTES de quemar subtítulos y marca de agua
-(`src/clip.py`, `src/video_filters.py`), para que el texto y el logo
-siempre queden nítidos encima del filtro, no filtrados también:
+DESPUÉS del crop vertical pero ANTES de quemar subtítulos
+(`src/clip.py`, `src/video_filters.py`), para que el texto siempre quede
+nítido encima del filtro, no filtrado también:
 
 ```bash
 python -m src.pipeline --url "..." --filter vintage
@@ -370,44 +285,42 @@ Sin `--filter`, sin cambios (como hasta ahora). Un nombre de filtro que no
 existe falla con un mensaje claro listando los nombres válidos, antes de
 generar ningún clip.
 
-### Crear campaña estándar
+### Tipos de contenido
 
-La mayoría de las campañas nuevas siguen el mismo patrón que "Ampeter" o
-"Luis Luceo": watermark con el logo de YouTube + nombre del canal, split
-permitido, subtítulos blancos (opcionalmente con un filtro de video).
-`src/add_campaign.py` arma ese bloque y lo agrega a `campaigns.json` solo,
-sin tener que editarlo a mano ni pensar qué ID sigue.
+`src.detect_moments` (llamado por `src.pipeline`) elige el criterio de
+selección de momentos según el tipo de contenido del video. Por default
+**no hace falta indicarlo**: el modelo lee el transcript y clasifica solo,
+en la misma llamada a la API, a cuál de estas 4 categorías pertenece, y
+aplica el criterio correspondiente:
 
-**Modo interactivo** (pregunta por consola):
+- **Entretenimiento con invitados** (formato Ibai, Sidemen, retos,
+  "adivina quién", debates, dinámicas sociales entre varias personas).
+- **Viaje/aventura** (país, presupuesto, hoteles, comida local, choque
+  cultural).
+- **Podcast/entrevista** (una persona entrevistando a otra, sin dinámica
+  de grupo ni componente de viaje).
+- **Narrativo de un solo streamer** (sin invitados, sin viaje, sin
+  formato entrevista — ej. gaming, fútbol, reacción en solitario).
+
+Si preferís forzar uno a mano en vez de dejar que el modelo clasifique,
+`--content-type <nombre>` carga ese criterio específico de
+`prompts/<nombre>.txt` en vez de la clasificación automática:
 
 ```bash
-python -m src.add_campaign
+python -m src.pipeline --url "..." --content-type invitado
+python -m src.pipeline --url "..." --content-type viajes
+python -m src.pipeline --url "..." --content-type podcast
+python -m src.pipeline --list-content-types
 ```
 
-Pide, en este orden: el nombre del canal de YouTube tal como debe
-aparecer en el watermark (ej. `IbaiLlanos`), un nombre "bonito" para
-mostrar (Enter para usar el mismo que el canal), y un filtro de video de
-la lista (Enter/`0` para ninguno). Al terminar imprime el ID asignado y
-la entrada creada.
-
-**Modo no interactivo** (para scripting):
-
-```bash
-python -m src.add_campaign --channel "IbaiLlanos" --display-name "Ibai Llanos"
-python -m src.add_campaign --channel "IbaiLlanos" --display-name "Ibai Llanos" --filter vintage
-```
-
-El ID se calcula solo (el máximo ID existente en `campaigns.json` + 1,
-nunca hardcodeado) y las campañas existentes no se tocan.
-
-Si el canal ya existe en otra campaña (mismo `watermark.text`), avisa en
-vez de crear una entrada repetida sin darte cuenta: en modo interactivo
-pregunta si querés crear una duplicada igual; en modo no interactivo
-aborta con un error a menos que agregues `--force`.
-
-`python -m src.add_campaign --list` lista las campañas existentes (mismo
-formato que `--list-campaigns` de `src.clip` — reutiliza esa función, no
-la duplica).
+Agregar un tipo de contenido nuevo es agregar un archivo
+`prompts/<nombre>.txt` (system prompt completo: rol, criterios de
+selección, formato de salida) — no hace falta tocar código
+(`src/content_types.py` los descubre solos). Un `--content-type` que no
+existe falla con un mensaje claro listando los nombres válidos, antes de
+descargar/transcribir nada. La deduplicación de momentos solapados
+(`dedupe_highlights()`) y la validación de duración (20-180s) se siguen
+aplicando igual sin importar qué prompt se haya usado — no cambiaron.
 
 ## Formato vertical, división en partes y subtítulos
 
