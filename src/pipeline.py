@@ -19,12 +19,15 @@ def run_pipeline(
     watermark: str | None = None,
     campaign: str | None = None,
     video_title_override: str | None = None,
+    max_clips: int | None = None,
 ) -> list[Path]:
     """Corre el pipeline completo a partir de una URL o un archivo local.
 
     `video_title_override`, si se pasa, se usa como nombre de la carpeta de
     salida en vez del titulo automatico (metadata de yt-dlp o nombre de
-    archivo) - ver `src.clip.cut_clips`.
+    archivo) - ver `src.clip.cut_clips`. `max_clips`, si se pasa, limita
+    cuantos MOMENTOS (no archivos finales) se procesan, quedandose con los
+    de mayor score - ver `src.clip.cut_clips`.
     """
     if not url and not file:
         raise ValueError("Debes indicar --url o --file")
@@ -52,6 +55,7 @@ def run_pipeline(
         watermark=watermark,
         campaign=campaign,
         video_title_override=video_title_override,
+        max_clips=max_clips,
     )
 
     parts = sum(1 for p in clip_paths if " PARTE " in p.stem)
@@ -76,6 +80,12 @@ def main() -> None:
         "--video-title",
         help="Nombre a usar para la carpeta de salida en vez del titulo automatico "
         "(metadata de yt-dlp o nombre de archivo).",
+    )
+    parser.add_argument(
+        "--max-clips",
+        type=int,
+        help="Limita cuantos momentos se procesan, quedandose con los de mayor score "
+        "(sin esto, sin limite). Se aplica a momentos, no a archivos finales.",
     )
     wm_group = parser.add_mutually_exclusive_group()
     wm_group.add_argument(
@@ -118,6 +128,7 @@ def main() -> None:
             watermark=args.watermark,
             campaign=args.campaign,
             video_title_override=args.video_title,
+            max_clips=args.max_clips,
         )
     except ValueError as e:
         parser.error(str(e))

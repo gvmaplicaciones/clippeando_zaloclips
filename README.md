@@ -75,6 +75,8 @@ La pantalla principal ("Generar clips") tiene:
   agua" como primera opción.
 - **Nombre del video** (opcional): si lo completás, se usa como nombre de
   la carpeta de salida en vez del título automático de yt-dlp.
+- **Máximo de clips** (opcional, vacío = sin límite): si lo completás, se
+  procesan solo los N momentos de mayor score (ver `--max-clips` más abajo).
 - Botón **Generar clips**: corre el pipeline completo (descarga →
   transcripción → detección de momentos → generación de clips con la
   config de la campaña elegida) y muestra el progreso en vivo — es el
@@ -107,7 +109,20 @@ python -m src.pipeline --url "https://..." --campaign 2
 
 # forzando el nombre de la carpeta de salida en vez del titulo automatico de yt-dlp
 python -m src.pipeline --url "https://..." --video-title "Nombre que yo elijo"
+
+# limitando cuantos momentos se procesan (te quedas con los N de mayor score)
+python -m src.pipeline --url "https://..." --max-clips 3
 ```
+
+`--max-clips N` se aplica a **momentos**, no a archivos finales: los
+momentos detectados se ordenan por score descendente y se descartan todos
+salvo los N mejores ANTES de generar nada (no se gasta tiempo de
+ffmpeg/watermark en los que no se van a usar). Si uno de los N momentos
+elegidos es largo y se divide en varias partes (`PARTE 1`/`PARTE 2`, ver
+más abajo), esas partes cuentan como un solo momento para el límite —
+podés terminar con más de N archivos `.mp4` en total, pero siempre de
+como mucho N momentos distintos. Sin `--max-clips`, sin límite (como
+hasta ahora).
 
 Esto genera:
 1. `input/<id>.mp4` (si se usó `--url`)

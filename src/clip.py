@@ -127,8 +127,17 @@ def cut_clips(
     watermark: str | None = None,
     campaign: str | None = None,
     video_title_override: str | None = None,
+    max_clips: int | None = None,
 ) -> list[Path]:
     """Genera los clips finales a partir de los momentos detectados.
+
+    `max_clips`, si se pasa, limita cuantos MOMENTOS se procesan (no
+    archivos finales): se ordenan por score descendente y se descartan
+    todos salvo los `max_clips` mejores ANTES de generar nada, para no
+    gastar tiempo de ffmpeg/watermark en momentos que no se van a usar. Un
+    momento largo que termina dividido en varias partes (PARTE 1/PARTE 2)
+    sigue contando como un solo momento para este limite, aunque genere
+    mas de un .mp4.
 
     Los clips se guardan en ``<output_dir>/<titulo del video>/``, nombrados
     "<hook_title>.mp4" (o "<hook_title> PARTE N.mp4" para momentos
@@ -189,6 +198,19 @@ def cut_clips(
     target_dir.mkdir(parents=True, exist_ok=True)
 
     moments = json.loads(moments_path.read_text(encoding="utf-8"))
+
+    if max_clips is not None and len(moments) > max_clips:
+        ranked = sorted(moments, key=lambda m: m.get("score", 0), reverse=True)
+        selected, discarded = ranked[:max_clips], ranked[max_clips:]
+        print(
+            f"--max-clips {max_clips}: se seleccionan los {max_clips} momentos de mayor score "
+            f"de los {len(moments)} detectados (se descartan {len(discarded)} antes de generar nada)."
+        )
+        for m in discarded:
+            print(f"  Descartado (score {m.get('score', '?')}): {m.get('hook_title') or '(sin titulo)'!r}")
+        # Se vuelve a ordenar por tiempo de inicio para generar los clips en
+        # el mismo orden cronologico de siempre, no por score.
+        moments = sorted(selected, key=lambda m: m["start"])
 
     transcript = None
     if transcript_path is not None and Path(transcript_path).exists():
@@ -299,6 +321,13 @@ def main() -> None:
         "(metadata de yt-dlp o nombre de archivo). Util si el titulo real es muy largo "
         "o preferis organizar las carpetas a mano.",
     )
+    parser.add_argument(
+        "--max-clips",
+        type=int,
+        help="Limita cuantos momentos se procesan, quedandose con los de mayor score "
+        "(sin esto, sin limite). Se aplica a momentos, no a archivos finales: un "
+        "momento largo dividido en PARTE 1/PARTE 2 sigue contando como uno solo.",
+    )
     wm_group = parser.add_mutually_exclusive_group()
     wm_group.add_argument(
         "--watermark",
@@ -341,6 +370,7 @@ def main() -> None:
             watermark=args.watermark,
             campaign=args.campaign,
             video_title_override=args.video_title,
+            max_clips=args.max_clips,
         )
     except ValueError as e:
         parser.error(str(e))

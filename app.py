@@ -100,7 +100,14 @@ def _render_campaigns_tab() -> None:
         st.divider()
 
 
-def _run_and_render(*, url: str | None, file_path: str | None, campaign_id: str | None, video_title: str | None) -> None:
+def _run_and_render(
+    *,
+    url: str | None,
+    file_path: str | None,
+    campaign_id: str | None,
+    video_title: str | None,
+    max_clips: int | None,
+) -> None:
     log_placeholder = st.empty()
     with st.status("Procesando…", expanded=True) as status_box:
         try:
@@ -111,6 +118,7 @@ def _run_and_render(*, url: str | None, file_path: str | None, campaign_id: str 
                     file=file_path,
                     campaign=campaign_id,
                     video_title_override=video_title or None,
+                    max_clips=max_clips,
                 )
         except Exception as e:
             status_box.update(label="Falló", state="error")
@@ -157,6 +165,16 @@ def _render_main_tab() -> None:
         "organizar las carpetas a mano).",
     )
 
+    max_clips = st.number_input(
+        "Máximo de clips (opcional)",
+        min_value=1,
+        step=1,
+        value=None,
+        help="Si lo completás, se procesan solo los N momentos de mayor score (el resto "
+        "se descarta antes de generar nada, ahorrando tiempo de ffmpeg/watermark). "
+        "Vacío = sin límite. Un momento largo dividido en PARTE 1/PARTE 2 cuenta como uno solo.",
+    )
+
     if not st.button("Generar clips", type="primary"):
         return
 
@@ -171,6 +189,7 @@ def _render_main_tab() -> None:
         file_path=file_path,
         campaign_id=campaign_id,
         video_title=video_title,
+        max_clips=int(max_clips) if max_clips else None,
     )
 
 
