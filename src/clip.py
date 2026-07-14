@@ -126,13 +126,17 @@ def cut_clips(
     output_dir: Path | None = None,
     watermark: str | None = None,
     campaign: str | None = None,
+    video_title_override: str | None = None,
 ) -> list[Path]:
     """Genera los clips finales a partir de los momentos detectados.
 
     Los clips se guardan en ``<output_dir>/<titulo del video>/``, nombrados
     "<hook_title>.mp4" (o "<hook_title> PARTE N.mp4" para momentos
-    divididos en partes). El titulo del video sale de la metadata guardada
-    por src.download (o del nombre de archivo si no hay metadata).
+    divididos en partes). El titulo del video sale de `video_title_override`
+    si se paso explicitamente (ej. desde app.py, un campo "Nombre del
+    video" que el usuario completa a mano); si no, de la metadata guardada
+    por src.download, o del nombre de archivo si no hay metadata ni
+    override.
 
     Pipeline por cada parte: recorte + crop vertical 9:16 en una sola pasada
     (para que el corte quede en el frame exacto) -> quemado de subtitulos
@@ -180,7 +184,7 @@ def cut_clips(
             )
         ass_style_kwargs = {"font_name": resolved_font, "text_color": campaign_obj.subtitle_style.text_color}
 
-    video_title = sanitize_filename(get_video_title(video_path))
+    video_title = sanitize_filename(video_title_override) if video_title_override else sanitize_filename(get_video_title(video_path))
     target_dir = base_dir / video_title
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -289,6 +293,12 @@ def main() -> None:
         help="Ruta al transcript JSON (transcripts/xxx.json). Habilita subtitulos karaoke "
         "y el ajuste de cortes a limite de palabra si tiene timestamps por palabra.",
     )
+    parser.add_argument(
+        "--video-title",
+        help="Nombre a usar para la carpeta de salida en vez del titulo automatico "
+        "(metadata de yt-dlp o nombre de archivo). Util si el titulo real es muy largo "
+        "o preferis organizar las carpetas a mano.",
+    )
     wm_group = parser.add_mutually_exclusive_group()
     wm_group.add_argument(
         "--watermark",
@@ -330,6 +340,7 @@ def main() -> None:
             transcript_path=Path(args.transcript) if args.transcript else None,
             watermark=args.watermark,
             campaign=args.campaign,
+            video_title_override=args.video_title,
         )
     except ValueError as e:
         parser.error(str(e))

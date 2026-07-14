@@ -72,40 +72,56 @@ def _parse_campaign(campaign_id: str, raw: dict) -> Campaign:
     )
 
 
+def get_all_campaigns() -> dict[str, Campaign]:
+    """Todas las campañas de campaigns.json, parseadas, indexadas por ID y
+    ordenadas numericamente. Fuente unica para --list-campaigns (CLI) y
+    para poblar el selector de campañas en app.py, sin duplicar el parseo.
+    """
+    raw_all = _load_raw()
+    return {
+        cid: _parse_campaign(cid, data)
+        for cid, data in sorted(raw_all.items(), key=lambda kv: int(kv[0]))
+    }
+
+
 def get_campaign(campaign_id: str) -> Campaign:
     """Devuelve el perfil de la campaña `campaign_id` (ej. "1", "2").
 
     Lanza ValueError con la lista de campañas validas si el ID no existe.
     """
-    raw_all = _load_raw()
-    if campaign_id not in raw_all:
-        valid = ", ".join(
-            f"{cid} ({data.get('name', '?')})"
-            for cid, data in sorted(raw_all.items(), key=lambda kv: int(kv[0]))
-        )
+    campaigns = get_all_campaigns()
+    if campaign_id not in campaigns:
+        valid = ", ".join(f"{cid} ({c.name})" for cid, c in campaigns.items())
         raise ValueError(
             f"Campaña desconocida: {campaign_id!r}. Campañas validas: {valid or '(ninguna definida en campaigns.json)'}"
         )
-    return _parse_campaign(campaign_id, raw_all[campaign_id])
+    return campaigns[campaign_id]
+
+
+def describe_campaign(campaign: Campaign) -> str:
+    """Resumen de una linea de la config de `campaign` (marca, split, subtitulos).
+
+    Usado tanto por list_campaigns() (CLI) como por la pestaña "Campañas" de
+    app.py para no duplicar el texto descriptivo.
+    """
+    wm_desc = f'marca "{campaign.watermark_text}"' if campaign.watermark_text else "sin marca"
+    split_desc = (
+        "permite dividir en partes"
+        if campaign.allow_split
+        else "PROHIBIDO dividir en partes (recorta a sub-segmento via LLM o descarta)"
+    )
+    return (
+        f"{wm_desc}, {split_desc}, subtitulos: color {campaign.subtitle_style.text_color!r}, "
+        f"fuente preferida {campaign.subtitle_style.font_candidates[0]!r}"
+    )
 
 
 def list_campaigns() -> None:
     """Imprime todas las campañas disponibles con un resumen de su config."""
-    raw_all = _load_raw()
-    if not raw_all:
+    campaigns = get_all_campaigns()
+    if not campaigns:
         print(f"No hay campañas definidas en {CAMPAIGNS_FILE}")
         return
     print("Campañas disponibles:")
-    for cid, data in sorted(raw_all.items(), key=lambda kv: int(kv[0])):
-        campaign = _parse_campaign(cid, data)
-        wm_desc = f'marca "{campaign.watermark_text}"' if campaign.watermark_text else "sin marca"
-        split_desc = (
-            "permite dividir en partes"
-            if campaign.allow_split
-            else "PROHIBIDO dividir en partes (recorta a sub-segmento via LLM o descarta)"
-        )
-        print(
-            f"  {cid}: {campaign.name} - {wm_desc}, {split_desc}, "
-            f"subtitulos: color {campaign.subtitle_style.text_color!r}, "
-            f"fuente preferida {campaign.subtitle_style.font_candidates[0]!r}"
-        )
+    for cid, campaign in campaigns.items():
+        print(f"  {cid}: {campaign.name} - {describe_campaign(campaign)}")

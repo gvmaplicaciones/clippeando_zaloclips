@@ -22,6 +22,7 @@ clip-pipeline/
   metadata/       # id/titulo/etc. de cada VOD descargado (ignorado por git)
   output/         # clips finales por defecto (ignorado por git; configurable con OUTPUT_DIR)
   campaigns.json  # perfiles de campaña: marca de agua + split + estilo de subtitulos
+  app.py          # interfaz web (Streamlit) - reutiliza las funciones de src/, no duplica logica
   src/            # código del pipeline
     clip.py        # orquesta: division en partes -> crop vertical -> subtitulos
     vertical.py    # crop centrado a 9:16 (1080x1920)
@@ -50,6 +51,45 @@ cp .env.example .env
 # ffmpeg debe estar instalado en el sistema (apt install ffmpeg / brew install ffmpeg)
 ```
 
+## Interfaz web
+
+Para no depender de la terminal, `app.py` (Streamlit) da una pantalla
+simple para generar clips. Es solo una interfaz: no reimplementa nada,
+llama directo a `src.pipeline.run_pipeline()`, `src.campaigns.get_all_campaigns()`,
+etc. — las mismas funciones que usan los comandos de línea de arriba.
+
+```bash
+streamlit run app.py
+```
+
+Abre automáticamente `http://localhost:8501` en el navegador (puerto
+default de Streamlit; si está ocupado, corré `streamlit run app.py --server.port 8502`
+o el que prefieras).
+
+La pantalla principal ("Generar clips") tiene:
+
+- **Origen del video**: una URL de YouTube o un archivo para subir (uno de
+  los dos, no ambos a la vez — la interfaz avisa si falta o sobra alguno).
+- **Campaña**: dropdown cargado directo desde `campaigns.json` (misma
+  función que usa `--list-campaigns`), con "Sin campaña / sin marca de
+  agua" como primera opción.
+- **Nombre del video** (opcional): si lo completás, se usa como nombre de
+  la carpeta de salida en vez del título automático de yt-dlp.
+- Botón **Generar clips**: corre el pipeline completo (descarga →
+  transcripción → detección de momentos → generación de clips con la
+  config de la campaña elegida) y muestra el progreso en vivo — es el
+  mismo texto que ya imprime cada paso por consola, capturado y volcado a
+  la interfaz a medida que llega, sin rehacer el logging.
+
+Al terminar, lista cada clip generado con su nombre y duración (vía
+`ffprobe`) y la carpeta final donde quedaron. Si algo falla en cualquier
+paso (descarga, transcripción, API de Claude, ffmpeg), el error se
+muestra en la interfaz con el traceback completo, sin que la app se
+cierre — podés corregir y volver a intentar sin reiniciar nada.
+
+La pestaña **Campañas** lista las campañas configuradas en
+`campaigns.json`, igual que `--list-campaigns` pero en la interfaz.
+
 ## Uso
 
 ```bash
@@ -64,6 +104,9 @@ python -m src.pipeline --url "https://..." --watermark ampeter
 
 # o un perfil de campaña completo (marca + split + subtitulos, ver "Campañas" mas abajo)
 python -m src.pipeline --url "https://..." --campaign 2
+
+# forzando el nombre de la carpeta de salida en vez del titulo automatico de yt-dlp
+python -m src.pipeline --url "https://..." --video-title "Nombre que yo elijo"
 ```
 
 Esto genera:

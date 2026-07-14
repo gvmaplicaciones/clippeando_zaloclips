@@ -4,3 +4,4 @@ python-dotenv
 ffmpeg-python
 yt-dlp
 Pillow
+streamlit

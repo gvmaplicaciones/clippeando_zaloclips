@@ -18,8 +18,14 @@ def run_pipeline(
     file: str | None = None,
     watermark: str | None = None,
     campaign: str | None = None,
+    video_title_override: str | None = None,
 ) -> list[Path]:
-    """Corre el pipeline completo a partir de una URL o un archivo local."""
+    """Corre el pipeline completo a partir de una URL o un archivo local.
+
+    `video_title_override`, si se pasa, se usa como nombre de la carpeta de
+    salida en vez del titulo automatico (metadata de yt-dlp o nombre de
+    archivo) - ver `src.clip.cut_clips`.
+    """
     if not url and not file:
         raise ValueError("Debes indicar --url o --file")
 
@@ -40,7 +46,12 @@ def run_pipeline(
     transcript_path = transcribe_video(audio_path)
     moments_path, moments, _usage = detect_moments(transcript_path)
     clip_paths = cut_clips(
-        video_path, moments_path, transcript_path=transcript_path, watermark=watermark, campaign=campaign
+        video_path,
+        moments_path,
+        transcript_path=transcript_path,
+        watermark=watermark,
+        campaign=campaign,
+        video_title_override=video_title_override,
     )
 
     parts = sum(1 for p in clip_paths if " PARTE " in p.stem)
@@ -61,6 +72,11 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--url", help="URL del VOD a descargar (yt-dlp)")
     group.add_argument("--file", help="Ruta a un video ya existente en input/")
+    parser.add_argument(
+        "--video-title",
+        help="Nombre a usar para la carpeta de salida en vez del titulo automatico "
+        "(metadata de yt-dlp o nombre de archivo).",
+    )
     wm_group = parser.add_mutually_exclusive_group()
     wm_group.add_argument(
         "--watermark",
@@ -96,7 +112,13 @@ def main() -> None:
         parser.error("--url o --file son requeridos (salvo con --list-watermarks/--list-campaigns)")
 
     try:
-        run_pipeline(url=args.url, file=args.file, watermark=args.watermark, campaign=args.campaign)
+        run_pipeline(
+            url=args.url,
+            file=args.file,
+            watermark=args.watermark,
+            campaign=args.campaign,
+            video_title_override=args.video_title,
+        )
     except ValueError as e:
         parser.error(str(e))
 
