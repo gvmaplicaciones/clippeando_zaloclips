@@ -31,6 +31,7 @@ from src.subtitles import (
     words_in_range,
 )
 from src.vertical import crop_to_vertical
+from src.video_filters import apply_video_filter, list_video_filters, resolve_video_filter
 from src.watermark import add_watermark
 from src.watermarks import get_watermark, list_watermarks
 
@@ -128,8 +129,15 @@ def cut_clips(
     campaign: str | None = None,
     video_title_override: str | None = None,
     max_clips: int | None = None,
+    video_filter: str | None = None,
 ) -> list[Path]:
     """Genera los clips finales a partir de los momentos detectados.
+
+    `video_filter` (una clave de src.video_filters.VIDEO_FILTERS, ej.
+    "vintage") se aplica sobre todo el clip DESPUES del crop vertical pero
+    ANTES de quemar subtitulos y marca de agua, para que el texto y el
+    logo siempre queden nitidos encima del filtro. Sin `video_filter`, sin
+    cambios (como hasta ahora).
 
     `max_clips`, si se pasa, limita cuantos MOMENTOS se procesan (no
     archivos finales): se ordenan por score descendente y se descartan
@@ -172,9 +180,10 @@ def cut_clips(
             "--watermark y --campaign no se pueden combinar: --campaign ya incluye su propia marca de agua."
         )
 
-    # Resolver marca de agua y campaña ANTES de generar nada: si el nombre
-    # no existe, mejor fallar de una con un mensaje claro que despues de
-    # procesar todos los clips.
+    # Resolver marca de agua, campaña y filtro de video ANTES de generar
+    # nada: si el nombre no existe, mejor fallar de una con un mensaje
+    # claro que despues de procesar todos los clips.
+    resolved_video_filter = resolve_video_filter(video_filter)
     campaign_obj = get_campaign(campaign) if campaign else None
     wm_config = get_watermark(watermark) if watermark else None
     if campaign_obj is not None and campaign_obj.watermark_text:
@@ -262,12 +271,18 @@ def cut_clips(
                 final_name = _dedupe_name(base_name, used_names)
 
                 vertical_path = tmp_dir / f"vertical_{i:02d}_{part_num or 0}.mp4"
+                filtered_path = tmp_dir / f"filtered_{i:02d}_{part_num or 0}.mp4"
                 ass_path = tmp_dir / f"sub_{i:02d}_{part_num or 0}.ass"
                 final_path = target_dir / final_name
 
                 crop_to_vertical(
                     video_path, vertical_path, start=part_start, duration=part_end - part_start
                 )
+
+                source_for_subtitles = vertical_path
+                if resolved_video_filter is not None:
+                    apply_video_filter(vertical_path, filtered_path, resolved_video_filter)
+                    source_for_subtitles = filtered_path
 
                 cliffhanger_text = None
                 if part_num is not None and not part["is_last"]:
@@ -288,7 +303,7 @@ def cut_clips(
                     cliffhanger_text=cliffhanger_text,
                     **ass_style_kwargs,
                 )
-                burn_subtitles(vertical_path, ass_content, ass_path, final_path)
+                burn_subtitles(source_for_subtitles, ass_content, ass_path, final_path)
 
                 if wm_config is not None:
                     add_watermark(
@@ -328,6 +343,17 @@ def main() -> None:
         "(sin esto, sin limite). Se aplica a momentos, no a archivos finales: un "
         "momento largo dividido en PARTE 1/PARTE 2 sigue contando como uno solo.",
     )
+    parser.add_argument(
+        "--filter",
+        dest="video_filter",
+        help="Filtro visual (de src.video_filters.VIDEO_FILTERS, ver --list-filters) aplicado "
+        "sobre todo el clip antes de los subtitulos y la marca de agua. Sin esto, sin filtro.",
+    )
+    parser.add_argument(
+        "--list-filters",
+        action="store_true",
+        help="Lista los filtros de video disponibles y termina, sin generar clips.",
+    )
     wm_group = parser.add_mutually_exclusive_group()
     wm_group.add_argument(
         "--watermark",
@@ -358,9 +384,14 @@ def main() -> None:
     if args.list_campaigns:
         list_campaign_profiles()
         return
+    if args.list_filters:
+        list_video_filters()
+        return
 
     if not args.video or not args.moments:
-        parser.error("--video y --moments son requeridos (salvo con --list-watermarks/--list-campaigns)")
+        parser.error(
+            "--video y --moments son requeridos (salvo con --list-watermarks/--list-campaigns/--list-filters)"
+        )
 
     try:
         clip_paths = cut_clips(
@@ -371,6 +402,7 @@ def main() -> None:
             campaign=args.campaign,
             video_title_override=args.video_title,
             max_clips=args.max_clips,
+            video_filter=args.video_filter,
         )
     except ValueError as e:
         parser.error(str(e))

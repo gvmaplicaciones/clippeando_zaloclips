@@ -10,6 +10,7 @@ from src.clip import cut_clips
 from src.detect_moments import detect_moments
 from src.download import ingest
 from src.transcribe import transcribe_video
+from src.video_filters import list_video_filters, resolve_video_filter
 from src.watermarks import get_watermark, list_watermarks
 
 
@@ -20,6 +21,7 @@ def run_pipeline(
     campaign: str | None = None,
     video_title_override: str | None = None,
     max_clips: int | None = None,
+    video_filter: str | None = None,
 ) -> list[Path]:
     """Corre el pipeline completo a partir de una URL o un archivo local.
 
@@ -27,14 +29,16 @@ def run_pipeline(
     salida en vez del titulo automatico (metadata de yt-dlp o nombre de
     archivo) - ver `src.clip.cut_clips`. `max_clips`, si se pasa, limita
     cuantos MOMENTOS (no archivos finales) se procesan, quedandose con los
-    de mayor score - ver `src.clip.cut_clips`.
+    de mayor score - ver `src.clip.cut_clips`. `video_filter`, si se pasa,
+    aplica un filtro visual sobre todo el clip antes de subtitulos y marca
+    de agua - ver `src.video_filters`.
     """
     if not url and not file:
         raise ValueError("Debes indicar --url o --file")
 
-    # Validar --watermark/--campaign ANTES de descargar/transcribir/detectar
-    # momentos: un nombre invalido no deberia descubrirse recien despues de
-    # gastar tiempo (y costo de API de Claude) en esos pasos previos.
+    # Validar --watermark/--campaign/--filter ANTES de descargar/transcribir
+    # /detectar momentos: un nombre invalido no deberia descubrirse recien
+    # despues de gastar tiempo (y costo de API de Claude) en esos pasos.
     if watermark and campaign:
         raise ValueError(
             "--watermark y --campaign no se pueden combinar: --campaign ya incluye su propia marca de agua."
@@ -43,6 +47,7 @@ def run_pipeline(
         get_watermark(watermark)
     if campaign:
         get_campaign(campaign)
+    resolve_video_filter(video_filter)
 
     video_path, audio_path = ingest(url=url, file=file)
 
@@ -56,6 +61,7 @@ def run_pipeline(
         campaign=campaign,
         video_title_override=video_title_override,
         max_clips=max_clips,
+        video_filter=video_filter,
     )
 
     parts = sum(1 for p in clip_paths if " PARTE " in p.stem)
@@ -87,6 +93,17 @@ def main() -> None:
         help="Limita cuantos momentos se procesan, quedandose con los de mayor score "
         "(sin esto, sin limite). Se aplica a momentos, no a archivos finales.",
     )
+    parser.add_argument(
+        "--filter",
+        dest="video_filter",
+        help="Filtro visual (ver --list-filters) aplicado sobre todo el clip antes de "
+        "subtitulos y marca de agua. Sin esto, sin filtro.",
+    )
+    parser.add_argument(
+        "--list-filters",
+        action="store_true",
+        help="Lista los filtros de video disponibles y termina, sin correr el pipeline.",
+    )
     wm_group = parser.add_mutually_exclusive_group()
     wm_group.add_argument(
         "--watermark",
@@ -117,9 +134,14 @@ def main() -> None:
     if args.list_campaigns:
         list_campaign_profiles()
         return
+    if args.list_filters:
+        list_video_filters()
+        return
 
     if not args.url and not args.file:
-        parser.error("--url o --file son requeridos (salvo con --list-watermarks/--list-campaigns)")
+        parser.error(
+            "--url o --file son requeridos (salvo con --list-watermarks/--list-campaigns/--list-filters)"
+        )
 
     try:
         run_pipeline(
@@ -129,6 +151,7 @@ def main() -> None:
             campaign=args.campaign,
             video_title_override=args.video_title,
             max_clips=args.max_clips,
+            video_filter=args.video_filter,
         )
     except ValueError as e:
         parser.error(str(e))

@@ -21,10 +21,12 @@ from src.campaigns import describe_campaign, get_all_campaigns
 from src.config import INPUT_DIR
 from src.ffmpeg_utils import probe_duration
 from src.pipeline import run_pipeline
+from src.video_filters import FILTER_LABELS
 
 st.set_page_config(page_title="Clip Pipeline", page_icon="🎬", layout="wide")
 
 NO_CAMPAIGN_LABEL = "Sin campaña / sin marca de agua"
+NO_FILTER_LABEL = "Ningún filtro"
 
 
 class _LiveLogWriter:
@@ -61,6 +63,14 @@ def _campaign_options() -> dict[str, str | None]:
     options: dict[str, str | None] = {NO_CAMPAIGN_LABEL: None}
     for cid, campaign in get_all_campaigns().items():
         options[f"{cid} - {campaign.name}"] = cid
+    return options
+
+
+def _filter_options() -> dict[str, str | None]:
+    """label visible -> nombre del filtro (clave de VIDEO_FILTERS) o None para "sin filtro"."""
+    options: dict[str, str | None] = {NO_FILTER_LABEL: None}
+    for name, label in FILTER_LABELS.items():
+        options[label] = name
     return options
 
 
@@ -107,6 +117,7 @@ def _run_and_render(
     campaign_id: str | None,
     video_title: str | None,
     max_clips: int | None,
+    video_filter: str | None,
 ) -> None:
     log_placeholder = st.empty()
     with st.status("Procesando…", expanded=True) as status_box:
@@ -119,6 +130,7 @@ def _run_and_render(
                     campaign=campaign_id,
                     video_title_override=video_title or None,
                     max_clips=max_clips,
+                    video_filter=video_filter,
                 )
         except Exception as e:
             status_box.update(label="Falló", state="error")
@@ -158,6 +170,14 @@ def _render_main_tab() -> None:
     campaign_label = st.selectbox("Campaña", list(campaign_options.keys()))
     campaign_id = campaign_options[campaign_label]
 
+    filter_options = _filter_options()
+    filter_label = st.selectbox(
+        "Filtro de video",
+        list(filter_options.keys()),
+        help="Se aplica sobre todo el clip antes de los subtítulos y la marca de agua.",
+    )
+    video_filter = filter_options[filter_label]
+
     video_title = st.text_input(
         "Nombre del video (opcional)",
         help="Si lo completás, se usa como nombre de la carpeta de salida en vez del "
@@ -190,6 +210,7 @@ def _render_main_tab() -> None:
         campaign_id=campaign_id,
         video_title=video_title,
         max_clips=int(max_clips) if max_clips else None,
+        video_filter=video_filter,
     )
 
 

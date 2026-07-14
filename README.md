@@ -24,8 +24,9 @@ clip-pipeline/
   campaigns.json  # perfiles de campaña: marca de agua + split + estilo de subtitulos
   app.py          # interfaz web (Streamlit) - reutiliza las funciones de src/, no duplica logica
   src/            # código del pipeline
-    clip.py        # orquesta: division en partes -> crop vertical -> subtitulos
+    clip.py        # orquesta: division en partes -> crop vertical -> filtro -> subtitulos -> watermark
     vertical.py    # crop centrado a 9:16 (1080x1920)
+    video_filters.py  # filtros visuales opcionales (espejo, vintage, TV a rayas, etc.)
     subtitles.py   # genera y quema el .ass de subtitulos karaoke
     naming.py      # sanitiza nombres de archivo/carpeta para que sean validos en Windows
     watermark.py   # quema el logo + texto sobre un clip (funcion compartida + script independiente)
@@ -73,6 +74,9 @@ La pantalla principal ("Generar clips") tiene:
 - **Campaña**: dropdown cargado directo desde `campaigns.json` (misma
   función que usa `--list-campaigns`), con "Sin campaña / sin marca de
   agua" como primera opción.
+- **Filtro de video** (opcional): espejo, vintage, TV a rayas, blanco y
+  negro o cinemático (ver `--filter` más abajo), con "Ningún filtro" como
+  primera opción.
 - **Nombre del video** (opcional): si lo completás, se usa como nombre de
   la carpeta de salida en vez del título automático de yt-dlp.
 - **Máximo de clips** (opcional, vacío = sin límite): si lo completás, se
@@ -112,6 +116,9 @@ python -m src.pipeline --url "https://..." --video-title "Nombre que yo elijo"
 
 # limitando cuantos momentos se procesan (te quedas con los N de mayor score)
 python -m src.pipeline --url "https://..." --max-clips 3
+
+# aplicando un filtro visual a todo el clip (ver "Filtros de video" mas abajo)
+python -m src.pipeline --url "https://..." --filter vintage
 ```
 
 `--max-clips N` se aplica a **momentos**, no a archivos finales: los
@@ -307,6 +314,31 @@ sub-segmento, así que el momento también se descarta.
 Un ID de campaña que no existe falla con un mensaje claro listando los
 IDs y nombres válidos, antes de generar ningún clip (o, en
 `src.pipeline`, antes de descargar/transcribir nada).
+
+### Filtros de video
+
+`--filter <nombre>` aplica un filtro visual sobre todo el clip. Se aplica
+DESPUÉS del crop vertical pero ANTES de quemar subtítulos y marca de agua
+(`src/clip.py`, `src/video_filters.py`), para que el texto y el logo
+siempre queden nítidos encima del filtro, no filtrados también:
+
+```bash
+python -m src.pipeline --url "..." --filter vintage
+python -m src.clip --video ... --moments ... --filter tv_scanlines
+python -m src.clip --list-filters
+```
+
+| Nombre | Efecto |
+|---|---|
+| `mirror` | Espejo (flip horizontal) |
+| `vintage` | Colores cálidos desaturados + viñeta |
+| `tv_scanlines` | Líneas horizontales estilo CRT/TV vieja |
+| `grayscale` | Blanco y negro |
+| `cinematic` | Alto contraste, colores más punchy |
+
+Sin `--filter`, sin cambios (como hasta ahora). Un nombre de filtro que no
+existe falla con un mensaje claro listando los nombres válidos, antes de
+generar ningún clip.
 
 ## Formato vertical, división en partes y subtítulos
 
