@@ -32,7 +32,7 @@ from src.subtitles import (
 )
 from src.vertical import crop_to_vertical
 from src.video_filters import apply_video_filter, list_video_filters, resolve_video_filter
-from src.watermark import add_watermark
+from src.watermark import DEFAULT_CTA_TEXT, add_watermark
 from src.watermarks import get_watermark, list_watermarks
 
 SPLIT_THRESHOLD = 90.0
@@ -130,8 +130,17 @@ def cut_clips(
     video_title_override: str | None = None,
     max_clips: int | None = None,
     video_filter: str | None = None,
+    cta_text: str | None = None,
 ) -> list[Path]:
     """Genera los clips finales a partir de los momentos detectados.
+
+    `cta_text` (opcional, por default no se agrega nada) se dibuja en letra
+    chica, en un par de lineas, arriba del logo+nombre de canal del
+    watermark (ej. "Puedes ver el video completo en") para redirigir al
+    publico - ver `src.watermark.add_watermark`. Solo tiene efecto si hay
+    marca de agua activa (`watermark` o `campaign`); si se pasa sin
+    ninguno de los dos, se ignora con un aviso (no hay logo+canal debajo
+    del cual dibujarlo).
 
     `video_filter` (una clave de src.video_filters.VIDEO_FILTERS, ej.
     "vintage") se aplica sobre todo el clip DESPUES del crop vertical pero
@@ -188,6 +197,13 @@ def cut_clips(
     wm_config = get_watermark(watermark) if watermark else None
     if campaign_obj is not None and campaign_obj.watermark_text:
         wm_config = {"text": campaign_obj.watermark_text, "logo": campaign_obj.watermark_logo}
+
+    if cta_text and wm_config is None:
+        print(
+            f"Aviso: se paso cta_text={cta_text!r} pero no hay marca de agua activa "
+            "(--watermark/--campaign); se ignora, no hay logo+nombre de canal debajo del cual dibujarlo."
+        )
+        cta_text = None
 
     allow_split = campaign_obj.allow_split if campaign_obj is not None else True
 
@@ -311,6 +327,7 @@ def cut_clips(
                         output_path=final_path,
                         text=wm_config["text"],
                         logo_path=Path(wm_config["logo"]),
+                        cta_text=cta_text,
                     )
 
                 clip_paths.append(final_path)
@@ -353,6 +370,15 @@ def main() -> None:
         "--list-filters",
         action="store_true",
         help="Lista los filtros de video disponibles y termina, sin generar clips.",
+    )
+    parser.add_argument(
+        "--cta-text",
+        nargs="?",
+        const=DEFAULT_CTA_TEXT,
+        default=None,
+        help="Mensaje opcional arriba del logo+nombre de canal del watermark, en letra chica "
+        f"(ej. {DEFAULT_CTA_TEXT!r}). Requiere --watermark o --campaign. Pasado sin valor usa "
+        "el default; con un valor propio, usa ese texto. Sin este flag, no se agrega nada.",
     )
     wm_group = parser.add_mutually_exclusive_group()
     wm_group.add_argument(
@@ -403,6 +429,7 @@ def main() -> None:
             video_title_override=args.video_title,
             max_clips=args.max_clips,
             video_filter=args.video_filter,
+            cta_text=args.cta_text,
         )
     except ValueError as e:
         parser.error(str(e))

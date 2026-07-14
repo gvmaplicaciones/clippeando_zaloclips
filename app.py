@@ -22,6 +22,7 @@ from src.config import INPUT_DIR
 from src.ffmpeg_utils import probe_duration
 from src.pipeline import run_pipeline
 from src.video_filters import FILTER_LABELS
+from src.watermark import DEFAULT_CTA_TEXT
 
 st.set_page_config(page_title="Clip Pipeline", page_icon="🎬", layout="wide")
 
@@ -118,6 +119,7 @@ def _run_and_render(
     video_title: str | None,
     max_clips: int | None,
     video_filter: str | None,
+    cta_text: str | None,
 ) -> None:
     log_placeholder = st.empty()
     with st.status("Procesando…", expanded=True) as status_box:
@@ -131,6 +133,7 @@ def _run_and_render(
                     video_title_override=video_title or None,
                     max_clips=max_clips,
                     video_filter=video_filter,
+                    cta_text=cta_text,
                 )
         except Exception as e:
             status_box.update(label="Falló", state="error")
@@ -178,6 +181,15 @@ def _render_main_tab() -> None:
     )
     video_filter = filter_options[filter_label]
 
+    show_cta = st.checkbox(
+        "Agregar mensaje arriba del logo (ej. \"Puedes ver el video completo en\")",
+        help="Mensaje chico, en un par de líneas, para redirigir al público. Solo tiene "
+        "efecto si elegiste una campaña (necesita el logo+nombre de canal debajo).",
+    )
+    cta_text = None
+    if show_cta:
+        cta_text = st.text_input("Texto del mensaje", value=DEFAULT_CTA_TEXT)
+
     video_title = st.text_input(
         "Nombre del video (opcional)",
         help="Si lo completás, se usa como nombre de la carpeta de salida en vez del "
@@ -211,6 +223,7 @@ def _render_main_tab() -> None:
         video_title=video_title,
         max_clips=int(max_clips) if max_clips else None,
         video_filter=video_filter,
+        cta_text=(cta_text or None) if show_cta else None,
     )
 
 

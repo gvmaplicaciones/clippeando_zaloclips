@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import textwrap
 from pathlib import Path
 
 from PIL import Image
@@ -22,6 +23,15 @@ from src.ffmpeg_utils import run_command as run_ffmpeg_command
 
 WATERMARK_TEXT = "ampeterby7"
 DEFAULT_LOGO_PATH = PROJECT_ROOT / "Youtube_logo.png"
+
+# Call-to-action opcional ("Puedes ver el video completo en") arriba del
+# logo+nombre de canal, para redirigir al publico. Apagado por default -
+# solo se agrega si se pasa cta_text explicitamente.
+DEFAULT_CTA_TEXT = "Puedes ver el video completo en"
+CTA_WRAP_WIDTH = 18  # caracteres aprox. por linea, para que entren ~2 lineas cortas
+CTA_FONT_SIZE = 20  # mas chico que el texto del canal (WATERMARK_FONT_SIZE=32): no debe ser intrusivo
+CTA_LINE_GAP_PX = 4  # separacion vertical entre las lineas del CTA
+CTA_GAP_ABOVE_LOGO_PX = 10  # separacion entre el CTA y la fila logo+nombre de canal
 
 # Los clips finales del pipeline duran como mucho unos pocos minutos
 # (src.clip.MAX_CLIP_DURATION = 180s antes de dividir en partes). Si el
@@ -86,6 +96,12 @@ def _escape_drawtext_text(text: str) -> str:
     return escaped
 
 
+def wrap_cta_lines(text: str, width: int = CTA_WRAP_WIDTH) -> list[str]:
+    """Parte `text` en lineas cortas (~2, "o asi" si el texto es largo) para
+    que el CTA no ocupe mucho ancho de pantalla."""
+    return textwrap.wrap(text, width=width) or [text]
+
+
 def check_logo_transparency(logo_path: Path) -> bool:
     """Devuelve True si `logo_path` tiene canal alpha con transparencia real.
 
@@ -112,12 +128,17 @@ def _build_filter_complex(
     logo_w: int,
     logo_h: int,
     font_file: str | None,
+    cta_lines: list[str] | None = None,
 ) -> str:
-    """Arma el filter_complex: escala el logo, lo superpone, y agrega el texto.
+    """Arma el filter_complex: escala el logo, lo superpone, agrega el texto
+    del canal y (opcional) un CTA de 1-varias lineas arriba de todo eso.
 
     Cadena: [1:v] se escala al tamaño del logo -> se overlay-ea sobre [0:v]
-    en la esquina inferior derecha -> se le agrega el texto con drawtext
-    inmediatamente a la izquierda del logo, centrado verticalmente con el.
+    en la esquina inferior derecha -> se le agrega el texto del canal con
+    drawtext inmediatamente a la izquierda del logo, centrado verticalmente
+    con el -> si hay `cta_lines`, se apilan arriba de esa fila, cada una
+    alineada a la derecha de forma independiente (con su propio `text_w` en
+    vez de un `text_align` que necesitaria una caja fija para tener efecto).
     Todas las posiciones usan fracciones del frame (no pixeles fijos) salvo
     el tamaño del logo en si, que es un valor fijo en px por diseño.
     """
@@ -133,40 +154,63 @@ def _build_filter_complex(
     # global -shortest de la salida no alcanza a cortarlo).
     overlay_filter = f"[0:v][logo]overlay=x='{logo_x}':y='{logo_y}':shortest=1[with_logo]"
 
+    def _drawtext_options(value: str, fontsize: int, x_expr: str, y_expr: str) -> str:
+        options = [f"text='{_escape_drawtext_text(value)}'"]
+        if resolved_font:
+            options.append(f"fontfile='{escape_filter_path(resolved_font)}'")
+        else:
+            # Ultimo recurso si no se encontro ningun archivo de fuente
+            # conocido: confiar en fontconfig (requiere un ffmpeg compilado
+            # con --enable-fontconfig; no todos los builds de Windows lo
+            # traen).
+            options.append("font=Sans")
+        options += [
+            f"fontsize={fontsize}",
+            f"fontcolor={WATERMARK_FONT_COLOR}",
+            f"borderw={WATERMARK_BORDER_WIDTH}",
+            f"bordercolor={WATERMARK_BORDER_COLOR}",
+            f"shadowx={WATERMARK_SHADOW_OFFSET}",
+            f"shadowy={WATERMARK_SHADOW_OFFSET}",
+            f"shadowcolor={WATERMARK_SHADOW_COLOR}",
+            f"x={x_expr}",
+            f"y={y_expr}",
+        ]
+        return ":".join(options)
+
     # Mismas formulas que logo_x/logo_y pero evaluadas con w/h (dimensiones
     # del frame en drawtext) y con logo_w/logo_h ya conocidos en Python, para
     # que el texto quede pegado al logo sin superponerse.
-    text_x = f"w-{logo_w}-({MARGIN_RIGHT_FRACTION}*w)-{TEXT_LOGO_GAP_PX}-text_w"
-    text_y = f"h-{logo_h}-({MARGIN_BOTTOM_FRACTION}*h)+(({logo_h}-text_h)/2)"
+    channel_text_x = f"w-{logo_w}-({MARGIN_RIGHT_FRACTION}*w)-{TEXT_LOGO_GAP_PX}-text_w"
+    channel_text_y = f"h-{logo_h}-({MARGIN_BOTTOM_FRACTION}*h)+(({logo_h}-text_h)/2)"
 
-    options = [f"text='{_escape_drawtext_text(text)}'"]
-    if resolved_font:
-        options.append(f"fontfile='{escape_filter_path(resolved_font)}'")
-    else:
-        # Ultimo recurso si no se encontro ningun archivo de fuente conocido:
-        # confiar en fontconfig (requiere un ffmpeg compilado con
-        # --enable-fontconfig; no todos los builds de Windows lo traen).
-        options.append("font=Sans")
-    options += [
-        f"fontsize={WATERMARK_FONT_SIZE}",
-        f"fontcolor={WATERMARK_FONT_COLOR}",
-        f"borderw={WATERMARK_BORDER_WIDTH}",
-        f"bordercolor={WATERMARK_BORDER_COLOR}",
-        f"shadowx={WATERMARK_SHADOW_OFFSET}",
-        f"shadowy={WATERMARK_SHADOW_OFFSET}",
-        f"shadowcolor={WATERMARK_SHADOW_COLOR}",
-        f"x={text_x}",
-        f"y={text_y}",
-    ]
-    drawtext_filter = "[with_logo]drawtext=" + ":".join(options) + "[out]"
+    # Cada elemento es el cuerpo de opciones de un drawtext (sin el prefijo
+    # "drawtext=" ni las etiquetas de entrada/salida), encadenados en orden.
+    stages = [_drawtext_options(text, WATERMARK_FONT_SIZE, channel_text_x, channel_text_y)]
 
-    return ";".join(
-        [
-            f"[1:v]scale={logo_w}:{logo_h}[logo]",
-            overlay_filter,
-            drawtext_filter,
-        ]
-    )
+    if cta_lines:
+        # Se apilan de abajo hacia arriba (la ultima linea del CTA queda mas
+        # cerca del logo). Todas usan la misma fontsize, asi que su text_h
+        # renderizado es igual entre si - se puede usar el text_h de cada
+        # instancia para calcular cuanto subir sin tener que pasarse valores
+        # entre filtros (cada drawtext solo conoce su propia geometria).
+        top_of_row_y = f"h-{logo_h}-({MARGIN_BOTTOM_FRACTION}*h)"
+        for idx, line in enumerate(reversed(cta_lines)):
+            lines_below = idx  # cuantas lineas de CTA ya renderizadas debajo de esta
+            cta_x = f"w-({MARGIN_RIGHT_FRACTION}*w)-text_w"
+            cta_y = (
+                f"({top_of_row_y})-{CTA_GAP_ABOVE_LOGO_PX}-(text_h*{lines_below + 1})"
+                f"-({CTA_LINE_GAP_PX}*{lines_below})"
+            )
+            stages.append(_drawtext_options(line, CTA_FONT_SIZE, cta_x, cta_y))
+
+    filters = [f"[1:v]scale={logo_w}:{logo_h}[logo]", overlay_filter]
+    last_label = "with_logo"
+    for idx, body in enumerate(stages):
+        out_label = "out" if idx == len(stages) - 1 else f"txt{idx}"
+        filters.append(f"[{last_label}]drawtext={body}[{out_label}]")
+        last_label = out_label
+
+    return ";".join(filters)
 
 
 def add_watermark(
@@ -175,6 +219,7 @@ def add_watermark(
     text: str = WATERMARK_TEXT,
     logo_path: Path = DEFAULT_LOGO_PATH,
     font_file: str | None = None,
+    cta_text: str | None = None,
 ) -> Path:
     """Superpone el logo de YouTube + `text` como watermark permanente
     (100% de la duracion, estatico) sobre `clip_path`.
@@ -183,6 +228,11 @@ def add_watermark(
     original (no destructivo). Si `output_path` es el mismo archivo que
     `clip_path`, lo sobreescribe de forma segura: renderiza a un temporal y
     recien reemplaza el original si ffmpeg termina bien.
+
+    `cta_text` es opcional (por default no se agrega nada): si se pasa, se
+    parte en un par de lineas cortas (`wrap_cta_lines`) y se dibuja arriba
+    del logo+nombre de canal, en letra chica, para redirigir al publico
+    (ej. "Puedes ver el video completo en").
     """
     clip_path = Path(clip_path)
     logo_path = Path(logo_path)
@@ -211,8 +261,9 @@ def add_watermark(
     if overwriting_in_place:
         render_path = output_path.with_name(f".{output_path.stem}.watermark_tmp{output_path.suffix}")
 
+    cta_lines = wrap_cta_lines(cta_text) if cta_text else None
     logo_w = _logo_scaled_width(logo_path, LOGO_HEIGHT_PX)
-    filter_complex = _build_filter_complex(text, logo_w, LOGO_HEIGHT_PX, font_file)
+    filter_complex = _build_filter_complex(text, logo_w, LOGO_HEIGHT_PX, font_file, cta_lines=cta_lines)
 
     args = [
         "ffmpeg", "-y",
@@ -249,11 +300,13 @@ def process_folder(
     font_file: str | None = None,
     overwrite: bool = False,
     limit: int | None = None,
+    cta_text: str | None = None,
 ) -> list[Path]:
     """Aplica el watermark a los .mp4 de `folder` (no recursivo).
 
     `limit`, si se pasa, procesa solo los primeros N clips (util para
-    probar en un clip real antes de correr el batch completo).
+    probar en un clip real antes de correr el batch completo). `cta_text`
+    es opcional, ver `add_watermark`.
     """
     folder = Path(folder)
     logo_path = Path(logo_path)
@@ -287,13 +340,17 @@ def process_folder(
     resolved_font = font_file or _find_font_file()
     print(f"Fuente usada para el watermark: {resolved_font or 'font=Sans (fontconfig, sin archivo especifico)'}")
     print(f"Logo usado: {logo_path} (transparencia real: {'si' if has_transparency else 'NO'})")
+    if cta_text:
+        print(f"CTA: {' / '.join(wrap_cta_lines(cta_text))!r}")
 
     total = len(clips)
     results = []
     for i, clip_path in enumerate(clips, start=1):
         print(f"[{i}/{total}] Aplicando watermark a: {clip_path.name}", flush=True)
         output_path = clip_path if overwrite else None
-        result = add_watermark(clip_path, output_path=output_path, text=text, logo_path=logo_path, font_file=font_file)
+        result = add_watermark(
+            clip_path, output_path=output_path, text=text, logo_path=logo_path, font_file=font_file, cta_text=cta_text
+        )
         print(f"  -> {result.name}", flush=True)
         results.append(result)
 
@@ -324,6 +381,15 @@ def main() -> None:
         type=int,
         help="Procesa solo los primeros N .mp4 de la carpeta (para probar en 1 clip antes del batch completo, ej. --limit 1)",
     )
+    parser.add_argument(
+        "--cta-text",
+        nargs="?",
+        const=DEFAULT_CTA_TEXT,
+        default=None,
+        help="Mensaje opcional arriba del logo+nombre de canal, en letra chica y en un par de "
+        f"lineas cortas, para redirigir al publico (ej. {DEFAULT_CTA_TEXT!r}). Sin este flag, no "
+        f"se agrega nada. Pasado sin valor usa el default; con un valor propio, usa ese texto.",
+    )
     args = parser.parse_args()
 
     try:
@@ -334,6 +400,7 @@ def main() -> None:
             font_file=args.font_file,
             overwrite=args.overwrite,
             limit=args.limit,
+            cta_text=args.cta_text,
         )
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)

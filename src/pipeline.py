@@ -11,6 +11,7 @@ from src.detect_moments import detect_moments
 from src.download import ingest
 from src.transcribe import transcribe_video
 from src.video_filters import list_video_filters, resolve_video_filter
+from src.watermark import DEFAULT_CTA_TEXT
 from src.watermarks import get_watermark, list_watermarks
 
 
@@ -22,6 +23,7 @@ def run_pipeline(
     video_title_override: str | None = None,
     max_clips: int | None = None,
     video_filter: str | None = None,
+    cta_text: str | None = None,
 ) -> list[Path]:
     """Corre el pipeline completo a partir de una URL o un archivo local.
 
@@ -31,7 +33,9 @@ def run_pipeline(
     cuantos MOMENTOS (no archivos finales) se procesan, quedandose con los
     de mayor score - ver `src.clip.cut_clips`. `video_filter`, si se pasa,
     aplica un filtro visual sobre todo el clip antes de subtitulos y marca
-    de agua - ver `src.video_filters`.
+    de agua - ver `src.video_filters`. `cta_text`, si se pasa (y hay
+    `watermark`/`campaign` activo), agrega un mensaje chico arriba del
+    logo+nombre de canal - ver `src.clip.cut_clips`.
     """
     if not url and not file:
         raise ValueError("Debes indicar --url o --file")
@@ -62,6 +66,7 @@ def run_pipeline(
         video_title_override=video_title_override,
         max_clips=max_clips,
         video_filter=video_filter,
+        cta_text=cta_text,
     )
 
     parts = sum(1 for p in clip_paths if " PARTE " in p.stem)
@@ -103,6 +108,15 @@ def main() -> None:
         "--list-filters",
         action="store_true",
         help="Lista los filtros de video disponibles y termina, sin correr el pipeline.",
+    )
+    parser.add_argument(
+        "--cta-text",
+        nargs="?",
+        const=DEFAULT_CTA_TEXT,
+        default=None,
+        help="Mensaje opcional arriba del logo+nombre de canal del watermark (requiere "
+        f"--watermark o --campaign). Pasado sin valor usa el default ({DEFAULT_CTA_TEXT!r}), "
+        "con un valor propio usa ese texto.",
     )
     wm_group = parser.add_mutually_exclusive_group()
     wm_group.add_argument(
@@ -152,6 +166,7 @@ def main() -> None:
             video_title_override=args.video_title,
             max_clips=args.max_clips,
             video_filter=args.video_filter,
+            cta_text=args.cta_text,
         )
     except ValueError as e:
         parser.error(str(e))

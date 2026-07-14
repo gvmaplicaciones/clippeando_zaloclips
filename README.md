@@ -77,6 +77,9 @@ La pantalla principal ("Generar clips") tiene:
 - **Filtro de video** (opcional): espejo, vintage, TV a rayas, blanco y
   negro o cinemático (ver `--filter` más abajo), con "Ningún filtro" como
   primera opción.
+- **Mensaje arriba del logo** (opcional, casilla + campo de texto): agrega
+  un CTA chico de un par de líneas arriba del logo+nombre de canal (ver
+  `--cta-text` más abajo). Solo tiene efecto si elegiste una campaña.
 - **Nombre del video** (opcional): si lo completás, se usa como nombre de
   la carpeta de salida en vez del título automático de yt-dlp.
 - **Máximo de clips** (opcional, vacío = sin límite): si lo completás, se
@@ -119,6 +122,9 @@ python -m src.pipeline --url "https://..." --max-clips 3
 
 # aplicando un filtro visual a todo el clip (ver "Filtros de video" mas abajo)
 python -m src.pipeline --url "https://..." --filter vintage
+
+# agregando un mensaje chico arriba del logo (requiere --watermark o --campaign)
+python -m src.pipeline --url "https://..." --campaign 1 --cta-text
 ```
 
 `--max-clips N` se aplica a **momentos**, no a archivos finales: los
@@ -253,6 +259,24 @@ instalada en tu máquina.
 Al arrancar, el script chequea que el PNG del logo tenga transparencia
 real (no solo modo RGBA — también que existan píxeles con alpha < 255) y
 avisa si no la tiene, antes de aplicar el watermark a ningún clip.
+
+**Mensaje de call-to-action (opcional)**: `--cta-text` agrega un mensaje
+chico, en un par de líneas, justo arriba del logo+nombre de canal, para
+redirigir al público (ej. "Puedes ver el video completo en" — el texto se
+parte solo en líneas cortas, no hace falta escribirlo ya partido):
+
+```bash
+# usa el texto default ("Puedes ver el video completo en")
+python -m src.watermark --folder "output/<título>" --cta-text
+
+# o un mensaje propio
+python -m src.watermark --folder "output/<título>" --cta-text "Mirá el video completo en"
+```
+
+Sin `--cta-text`, no se agrega nada (como hasta ahora). Como el CTA se
+dibuja arriba del logo+canal, solo tiene sentido si hay watermark: en
+`src.clip`/`src.pipeline` (ver más abajo) se ignora con un aviso si se
+pasa sin `--watermark` ni `--campaign`.
 
 ### Campañas
 
