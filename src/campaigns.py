@@ -15,12 +15,15 @@ Formato de cada bloque:
       "subtitle_style": {                                     // opcional
         "text_color": "white",                                // ver subtitles.KARAOKE_COLOR_ASS
         "font_candidates": ["DejaVu Sans"]                     // en orden de preferencia
-      }
+      },
+      "video_filter": "vintage"                               // opcional, ver src.video_filters
     }
 
 ``watermark``/``subtitle_style`` ausentes caen a sin marca / al estilo
 default de subtitulos respectivamente. ``logo`` es relativo a la raiz del
-repo (PROJECT_ROOT).
+repo (PROJECT_ROOT). ``video_filter`` ausente cae a sin filtro; si se pasa
+``--filter`` explicito al generar clips, ese gana sobre el de la campaña
+(ver `src.clip.cut_clips`).
 """
 from __future__ import annotations
 
@@ -47,6 +50,7 @@ class Campaign:
     watermark_logo: Path | None
     allow_split: bool
     subtitle_style: SubtitleStyle
+    video_filter: str | None = None
 
 
 def _load_raw() -> dict:
@@ -69,6 +73,7 @@ def _parse_campaign(campaign_id: str, raw: dict) -> Campaign:
             text_color=sub.get("text_color", "white"),
             font_candidates=sub.get("font_candidates") or ["DejaVu Sans"],
         ),
+        video_filter=raw.get("video_filter"),
     )
 
 
@@ -110,9 +115,10 @@ def describe_campaign(campaign: Campaign) -> str:
         if campaign.allow_split
         else "PROHIBIDO dividir en partes (recorta a sub-segmento via LLM o descarta)"
     )
+    filter_desc = f", filtro: {campaign.video_filter!r}" if campaign.video_filter else ""
     return (
         f"{wm_desc}, {split_desc}, subtitulos: color {campaign.subtitle_style.text_color!r}, "
-        f"fuente preferida {campaign.subtitle_style.font_candidates[0]!r}"
+        f"fuente preferida {campaign.subtitle_style.font_candidates[0]!r}{filter_desc}"
     )
 
 

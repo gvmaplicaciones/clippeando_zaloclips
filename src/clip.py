@@ -172,13 +172,16 @@ def cut_clips(
     despues.
 
     `campaign` (ID de src.campaigns.WATERMARKS, ej. "1") agrupa marca de
-    agua + `allow_split` + estilo de subtitulos en un solo perfil; no se
-    puede combinar con `watermark` suelto (`campaign` ya incluye su propia
-    marca). Si la campaña tiene `allow_split=False`, los momentos de mas de
-    SPLIT_THRESHOLD segundos no se dividen en partes: en su lugar se le
-    pide a Claude (src.detect_moments.shrink_moment_to_subsegment) un
-    sub-segmento autocontenido mas corto, o se descarta el momento si
-    Claude determina que ninguno funciona solo.
+    agua + `allow_split` + estilo de subtitulos + filtro de video default
+    en un solo perfil; no se puede combinar con `watermark` suelto
+    (`campaign` ya incluye su propia marca). Si la campaña tiene
+    `allow_split=False`, los momentos de mas de SPLIT_THRESHOLD segundos no
+    se dividen en partes: en su lugar se le pide a Claude
+    (src.detect_moments.shrink_moment_to_subsegment) un sub-segmento
+    autocontenido mas corto, o se descarta el momento si Claude determina
+    que ninguno funciona solo. Si la campaña tiene un `video_filter` propio
+    (ver src.add_campaign) se usa como default; un `video_filter` explicito
+    pasado a esta funcion tiene prioridad sobre el de la campaña.
     """
     video_path = Path(video_path)
     moments_path = Path(moments_path)
@@ -192,8 +195,9 @@ def cut_clips(
     # Resolver marca de agua, campaña y filtro de video ANTES de generar
     # nada: si el nombre no existe, mejor fallar de una con un mensaje
     # claro que despues de procesar todos los clips.
-    resolved_video_filter = resolve_video_filter(video_filter)
     campaign_obj = get_campaign(campaign) if campaign else None
+    effective_video_filter = video_filter or (campaign_obj.video_filter if campaign_obj is not None else None)
+    resolved_video_filter = resolve_video_filter(effective_video_filter)
     wm_config = get_watermark(watermark) if watermark else None
     if campaign_obj is not None and campaign_obj.watermark_text:
         wm_config = {"text": campaign_obj.watermark_text, "logo": campaign_obj.watermark_logo}

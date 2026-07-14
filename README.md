@@ -32,6 +32,7 @@ clip-pipeline/
     watermark.py   # quema el logo + texto sobre un clip (funcion compartida + script independiente)
     watermarks.py  # registro de marcas de agua conocidas por nombre (texto + logo)
     campaigns.py   # carga campaigns.json: perfiles de campaña por numero
+    add_campaign.py  # crea campañas "estandar" en campaigns.json sin editarlo a mano
     detect_moments.py  # deteccion de momentos + recorte a sub-segmento via LLM (campañas sin split)
   notebooks/
     pipeline_colab.ipynb   # notebook para correr todo en Google Colab
@@ -339,6 +340,11 @@ Un ID de campaña que no existe falla con un mensaje claro listando los
 IDs y nombres válidos, antes de generar ningún clip (o, en
 `src.pipeline`, antes de descargar/transcribir nada).
 
+Un bloque de campaña también puede tener un `"video_filter"` opcional (ver
+"Filtros de video" más abajo) — se usa como filtro por default de esa
+campaña; un `--filter` explícito al generar clips gana sobre el de la
+campaña.
+
 ### Filtros de video
 
 `--filter <nombre>` aplica un filtro visual sobre todo el clip. Se aplica
@@ -363,6 +369,45 @@ python -m src.clip --list-filters
 Sin `--filter`, sin cambios (como hasta ahora). Un nombre de filtro que no
 existe falla con un mensaje claro listando los nombres válidos, antes de
 generar ningún clip.
+
+### Crear campaña estándar
+
+La mayoría de las campañas nuevas siguen el mismo patrón que "Ampeter" o
+"Luis Luceo": watermark con el logo de YouTube + nombre del canal, split
+permitido, subtítulos blancos (opcionalmente con un filtro de video).
+`src/add_campaign.py` arma ese bloque y lo agrega a `campaigns.json` solo,
+sin tener que editarlo a mano ni pensar qué ID sigue.
+
+**Modo interactivo** (pregunta por consola):
+
+```bash
+python -m src.add_campaign
+```
+
+Pide, en este orden: el nombre del canal de YouTube tal como debe
+aparecer en el watermark (ej. `IbaiLlanos`), un nombre "bonito" para
+mostrar (Enter para usar el mismo que el canal), y un filtro de video de
+la lista (Enter/`0` para ninguno). Al terminar imprime el ID asignado y
+la entrada creada.
+
+**Modo no interactivo** (para scripting):
+
+```bash
+python -m src.add_campaign --channel "IbaiLlanos" --display-name "Ibai Llanos"
+python -m src.add_campaign --channel "IbaiLlanos" --display-name "Ibai Llanos" --filter vintage
+```
+
+El ID se calcula solo (el máximo ID existente en `campaigns.json` + 1,
+nunca hardcodeado) y las campañas existentes no se tocan.
+
+Si el canal ya existe en otra campaña (mismo `watermark.text`), avisa en
+vez de crear una entrada repetida sin darte cuenta: en modo interactivo
+pregunta si querés crear una duplicada igual; en modo no interactivo
+aborta con un error a menos que agregues `--force`.
+
+`python -m src.add_campaign --list` lista las campañas existentes (mismo
+formato que `--list-campaigns` de `src.clip` — reutiliza esa función, no
+la duplica).
 
 ## Formato vertical, división en partes y subtítulos
 
