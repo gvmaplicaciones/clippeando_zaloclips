@@ -1,0 +1,65 @@
+[
+  {
+    "start": 0.0,
+    "end": 45.0,
+    "reason": "Gancho fuerte con la premisa del video: un mundial entre youtubers con penaltis eliminatorios y un premio increíble. Plantea la narrativa completa del formato.",
+    "hook_title": "MUNDIAL DE YOUTUBERS CON PENALTIS",
+    "score": 72
+  },
+  {
+    "start": 74.6,
+    "end": 120.0,
+    "reason": "Secuencia de cuartos de final Argentina-Francia con tensión narrativa clara. Incluye planteo (predicciones), acción (penaltis) y remates (goles/fallos) con reacciones intensas.",
+    "hook_title": "ARGENTINA VS FRANCIA EN CUARTOS",
+    "score": 75
+  },
+  {
+    "start": 162.0,
+    "end": 202.0,
+    "reason": "Cuarto de final Inglaterra-Alemania con jugada viral: Trevor anota un golazo espectacular con reacción emotiva del comentarista ('¿Cómo va a meter eso, bro?'). Momento puro de asombro.",
+    "hook_title": "GOLAZO IMPOSIBLE DE TREVOR",
+    "score": 82
+  },
+  {
+    "start": 284.7,
+    "end": 370.0,
+    "reason": "Portugal-Japón con drama extremo: Borja vs Grefg. Incluye panenka, penalti fallado histórico del Grefg ('RIDÍCULO HISTÓRICO'), tensión máxima y remate definitivo. Narrativa completa de jugada.",
+    "hook_title": "RIDÍCULO HISTÓRICO DEL GREFG",
+    "score": 88
+  },
+  {
+    "start": 381.1,
+    "end": 473.0,
+    "reason": "México-España (cuartos) con tensión creciente. Vicent falla primero, presión psicológica sobre ambos, remate con eliminación. Narrativa de jugada con planteo y consecuencias claras.",
+    "hook_title": "MÉXICO ELIMINADO EN CUARTOS",
+    "score": 70
+  },
+  {
+    "start": 525.8,
+    "end": 697.0,
+    "reason": "Semifinal Argentina-Inglaterra con tensión máxima. Incluye: parada espectacular del portero, goles emotivos, momento del 'COBRE EL BOTE' viral, jugadas con saltos, reacciones intensas. Secuencia completa de un gran partido.",
+    "hook_title": "ARGENTINA-INGLATERRA ÉPICO",
+    "score": 85
+  },
+  {
+    "start": 719.4,
+    "end": 834.0,
+    "reason": "Semifinal Portugal-España (Borja vs Ampeter). Drama con paradas imposibles, portero pagado meme, tensión mental, remate definitivo. Narrativa clara de planteo-acción-remate con giro cómico.",
+    "hook_title": "EL PORTERO ESTÁ PAGADO",
+    "score": 78
+  },
+  {
+    "start": 954.7,
+    "end": 1106.0,
+    "reason": "Gran Final España-Argentina completa. Máxima tensión narrativa: cambios de marcador, penaltis fallados, parada épica del portero, drama psicológico, remate definitivo con giro final (el portero gana la copa). Secuencia viral excepcional.",
+    "hook_title": "FINAL ÉPICA ESPAÑA VS ARGENTINA",
+    "score": 92
+  },
+  {
+    "start": 1106.8,
+    "end": 1145.6,
+    "reason": "Sorteo final de premio: twist ending donde el ganador saca la copa del cuenco. Cierre satisfactorio del video con momento de celebración. Remate narrativo del formato.",
+    "hook_title": "¿QUIÉN SE LLEVA LA COPA?",
+    "score": 68
+  }
+]

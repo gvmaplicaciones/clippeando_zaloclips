@@ -1,0 +1,30 @@
+[
+  {
+    "start": 0.0,
+    "end": 46.1,
+    "reason": "Presentación del setup completo: la apuesta de 1000 euros, la sorpresa del jugador profesional, y la reacción inicial de los competidores. Es la jugada completa de planteo antes del partido.",
+    "hook_title": "Traje un tenista PRO mundial sin que lo sepan",
+    "score": 78
+  },
+  {
+    "start": 277.8,
+    "end": 300.7,
+    "reason": "Momento de giro narrativo donde descubren que el hermano es muy bueno. Incluye la sospecha creciente, las menciones de que 'es pro', y el remate emocional 'Me gustaría que esto no fueran los peores 2.000 euros de mi vida'. Jugada completa con tensión y cierre.",
+    "hook_title": "Creo que mi hermano ES un tenista profesional",
+    "score": 82
+  },
+  {
+    "start": 429.0,
+    "end": 480.2,
+    "reason": "Secuencia donde revelan el nivel de Pedro: saca increíble, cambios de mano, técnica profesional visible. Incluye confesión ('jugué ping pong 6 años profesional') y el momento donde confirman que es top 100. Narrativa completa de revelación.",
+    "hook_title": "Reveló que jugó PING PONG PROFESIONAL 6 años",
+    "score": 85
+  },
+  {
+    "start": 950.2,
+    "end": 1005.7,
+    "reason": "Remate final absoluto del video: revelación completa de quién es Pedro (top 100 mundial, ranking 34-36), explicación del engaño, reacciones finales, y cierre emocional con agradecimientos. Es el desenlace de toda la jugada.",
+    "hook_title": "Mi hermano es TOP 100 del mundo en tenis",
+    "score": 92
+  }
+]

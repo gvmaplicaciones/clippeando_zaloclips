@@ -101,7 +101,7 @@ def fetch_metadata(url: str) -> dict:
     Util para backfillear el titulo de un video que ya se descargo antes de
     que este modulo empezara a guardar metadata.
     """
-    ydl_opts = {"noplaylist": True, "skip_download": True}
+    ydl_opts = {"noplaylist": True, "skip_download": True, "nocheckcertificate": True}
     ydl_opts.update(_cookie_ydl_opts())
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -127,6 +127,7 @@ def download_vod(url: str, output_dir: Path | None = None) -> Path:
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "merge_output_format": "mp4",
         "noplaylist": True,
+        "nocheckcertificate": True,
     }
     ydl_opts.update(_cookie_ydl_opts())
 

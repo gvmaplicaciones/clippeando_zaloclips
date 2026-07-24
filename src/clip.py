@@ -18,13 +18,12 @@ import math
 import tempfile
 from pathlib import Path
 
-import ffmpeg
-
 from src.config import OUTPUT_DIR
 from src.download import get_video_title
+from src.ffmpeg_utils import concat_clips, verify_video_and_audio
 from src.naming import sanitize_filename
 from src.subtitles import build_ass, burn_subtitles, flatten_words, segments_in_range, words_in_range
-from src.vertical import crop_to_vertical
+from src.vertical import VERTICAL_HEIGHT, VERTICAL_WIDTH, crop_to_vertical, crop_to_vertical_blur_fill
 from src.video_filters import apply_video_filter, list_video_filters, resolve_video_filter
 
 SPLIT_THRESHOLD = 90.0
@@ -112,6 +111,10 @@ def _dedupe_name(base_name: str, used_names: set[str]) -> str:
     return candidate
 
 
+VERTICAL_MODES = ("crop", "blur_fill")
+HOOK_VERTICAL_MODES = ("crop", "blur_fill", "same")
+
+
 def cut_clips(
     video_path: Path,
     moments_path: Path,
@@ -120,6 +123,9 @@ def cut_clips(
     video_title_override: str | None = None,
     max_clips: int | None = None,
     video_filter: str | None = None,
+    vertical_mode: str = "crop",
+    hook_teaser: bool = True,
+    hook_vertical_mode: str = "same",
 ) -> list[Path]:
     """Genera los clips finales a partir de los momentos detectados.
 
@@ -154,6 +160,11 @@ def cut_clips(
     moments_path = Path(moments_path)
     base_dir = output_dir or OUTPUT_DIR
 
+    if vertical_mode not in VERTICAL_MODES:
+        raise ValueError(f"--vertical-mode invalido: {vertical_mode!r}. Opciones: {', '.join(VERTICAL_MODES)}")
+    if hook_vertical_mode not in HOOK_VERTICAL_MODES:
+        raise ValueError(f"--hook-vertical-mode invalido: {hook_vertical_mode!r}. Opciones: {', '.join(HOOK_VERTICAL_MODES)}")
+
     # Resolver el filtro de video ANTES de generar nada: si el nombre no
     # existe, mejor fallar de una con un mensaje claro que despues de
     # procesar todos los clips.
@@ -186,27 +197,38 @@ def cut_clips(
     clip_paths: list[Path] = []
     used_names: set[str] = set()
 
+    _crop_fn = crop_to_vertical_blur_fill if vertical_mode == "blur_fill" else crop_to_vertical
+
+    # hook_vertical_mode "same" (default) -> mismo modo que el cuerpo.
+    if hook_vertical_mode == "same":
+        _hook_crop_fn = _crop_fn
+    elif hook_vertical_mode == "blur_fill":
+        _hook_crop_fn = crop_to_vertical_blur_fill
+    else:  # "crop"
+        _hook_crop_fn = crop_to_vertical
+
     with tempfile.TemporaryDirectory(prefix="clip_pipeline_") as tmp:
         tmp_dir = Path(tmp)
 
         for i, moment in enumerate(moments, start=1):
             hook_title = sanitize_filename(moment.get("hook_title") or "Momento destacado")
+            m_hook_start = moment.get("hook_start")
+            m_hook_end = moment.get("hook_end")
 
             for part in _plan_parts(moment, all_words):
                 part_start, part_end = part["start"], part["end"]
                 part_num = part["part_num"]
+                p = part_num or 0
 
                 base_name = hook_title if part_num is None else f"{hook_title} PARTE {part_num}"
                 final_name = _dedupe_name(base_name, used_names)
 
-                vertical_path = tmp_dir / f"vertical_{i:02d}_{part_num or 0}.mp4"
-                filtered_path = tmp_dir / f"filtered_{i:02d}_{part_num or 0}.mp4"
-                ass_path = tmp_dir / f"sub_{i:02d}_{part_num or 0}.ass"
+                vertical_path = tmp_dir / f"vertical_{i:02d}_{p}.mp4"
+                filtered_path = tmp_dir / f"filtered_{i:02d}_{p}.mp4"
+                ass_path = tmp_dir / f"sub_{i:02d}_{p}.ass"
                 final_path = target_dir / final_name
 
-                crop_to_vertical(
-                    video_path, vertical_path, start=part_start, duration=part_end - part_start
-                )
+                _crop_fn(video_path, vertical_path, start=part_start, duration=part_end - part_start)
 
                 source_for_subtitles = vertical_path
                 if resolved_video_filter is not None:
@@ -224,14 +246,82 @@ def cut_clips(
                     else []
                 )
 
-                ass_content = build_ass(
-                    duration=part_end - part_start,
-                    words=words or None,
-                    segments=segments or None,
-                    title=part["title"],
-                    cliffhanger_text=cliffhanger_text,
+                # Hook teaser: solo en clips simples (part_num is None) o en
+                # la primera parte de un momento dividido. No tiene sentido
+                # preponer un teaser a PARTE 2, 3, etc.
+                use_hook = (
+                    hook_teaser
+                    and m_hook_start is not None
+                    and m_hook_end is not None
+                    and (part_num is None or part_num == 1)
                 )
-                burn_subtitles(source_for_subtitles, ass_content, ass_path, final_path)
+
+                if use_hook:
+                    hook_start = float(m_hook_start)
+                    hook_end = min(float(m_hook_end), hook_start + 4.0)
+                    hook_dur = hook_end - hook_start
+
+                    hook_v = tmp_dir / f"hook_v_{i:02d}_{p}.mp4"
+                    hook_f = tmp_dir / f"hook_f_{i:02d}_{p}.mp4"
+                    hook_ass = tmp_dir / f"hook_s_{i:02d}_{p}.ass"
+                    hook_subbed = tmp_dir / f"hook_sub_{i:02d}_{p}.mp4"
+                    full_subbed = tmp_dir / f"full_sub_{i:02d}_{p}.mp4"
+
+                    # Hook: siempre crop_to_vertical (pantalla completa) salvo
+                    # que --hook-vertical-mode lo sobreescriba explicitamente.
+                    _hook_crop_fn(video_path, hook_v, start=hook_start, duration=hook_dur)
+                    hook_src = hook_v
+                    if resolved_video_filter is not None:
+                        apply_video_filter(hook_v, hook_f, resolved_video_filter)
+                        hook_src = hook_f
+
+                    hook_words = words_in_range(transcript, hook_start, hook_end) if transcript else []
+                    hook_segs = (
+                        segments_in_range(transcript, hook_start, hook_end)
+                        if transcript and not hook_words else []
+                    )
+                    burn_subtitles(
+                        hook_src,
+                        build_ass(
+                            duration=hook_dur,
+                            words=hook_words or None,
+                            segments=hook_segs or None,
+                            hook_overlay_text=moment.get("hook_overlay_text") or None,
+                        ),
+                        hook_ass,
+                        hook_subbed,
+                    )
+
+                    # Clip completo con subtítulos → temp
+                    burn_subtitles(
+                        source_for_subtitles,
+                        build_ass(
+                            duration=part_end - part_start,
+                            words=words or None,
+                            segments=segments or None,
+                            title=part["title"],
+                            cliffhanger_text=cliffhanger_text,
+                        ),
+                        ass_path,
+                        full_subbed,
+                    )
+
+                    concat_clips(hook_subbed, full_subbed, final_path)
+                    verify_video_and_audio(final_path)
+
+                else:
+                    burn_subtitles(
+                        source_for_subtitles,
+                        build_ass(
+                            duration=part_end - part_start,
+                            words=words or None,
+                            segments=segments or None,
+                            title=part["title"],
+                            cliffhanger_text=cliffhanger_text,
+                        ),
+                        ass_path,
+                        final_path,
+                    )
 
                 clip_paths.append(final_path)
 
@@ -274,6 +364,27 @@ def main() -> None:
         action="store_true",
         help="Lista los filtros de video disponibles y termina, sin generar clips.",
     )
+    parser.add_argument(
+        "--vertical-mode",
+        choices=VERTICAL_MODES,
+        default="crop",
+        help="Modo de conversion a vertical: 'crop' (recorte centrado, por defecto) o "
+        "'blur_fill' (video entero sobre fondo difuminado, sin perder contenido de los bordes).",
+    )
+    parser.add_argument(
+        "--hook-teaser",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Antepone un avance de 2-4s con la frase mas impactante del clip (default: activado). "
+        "Usa --no-hook-teaser para desactivar.",
+    )
+    parser.add_argument(
+        "--hook-vertical-mode",
+        choices=HOOK_VERTICAL_MODES,
+        default="same",
+        help="Modo vertical del hook-teaser: 'same' (default, mismo que --vertical-mode), "
+        "'crop' (pantalla completa recortada), 'blur_fill' (fondo difuminado).",
+    )
     args = parser.parse_args()
 
     if args.list_filters:
@@ -291,6 +402,9 @@ def main() -> None:
             video_title_override=args.video_title,
             max_clips=args.max_clips,
             video_filter=args.video_filter,
+            vertical_mode=args.vertical_mode,
+            hook_teaser=args.hook_teaser,
+            hook_vertical_mode=args.hook_vertical_mode,
         )
     except ValueError as e:
         parser.error(str(e))

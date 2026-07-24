@@ -13,6 +13,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 
 def _resolve_dir(env_var: str, default: Path) -> Path:
     value = os.getenv(env_var)

@@ -75,11 +75,46 @@ contexto para tener sentido.
 - Usa TODO el rango de 0 a 100 con criterio real y honesto: la mayoria del \
 contenido normal deberia puntuar entre 50 y 70, reserva 90-100 \
 unicamente para 1 o 2 momentos verdaderamente excepcionales.
+- hook_start/hook_end: el timestamp exacto (inicio y fin) de la frase o \
+linea MAS impactante del clip — la que mejor funcionaria como avance de \
+2-4 segundos al inicio del video. IMPORTANTE: hook_start NO debe ser el \
+inicio del clip salvo que genuinamente la frase mas fuerte este en el \
+primer segundo (esto debe ser la excepcion, no la regla). Busca dentro de \
+TODO el rango start-end: suele ser la revelacion, el remate, la traicion, \
+el momento de mayor tension — normalmente en la mitad o al final del clip, \
+no al principio. Si hook_start coincide con start en un clip de mas de \
+15s, es casi seguro un error.
+- hook_overlay_text: texto MUY CORTO (maximo 6-8 palabras), SIEMPRE EN \
+MAYUSCULAS, agresivo y llamativo como un titular de clickbait pero fiel al \
+contenido real del clip (nunca prometas algo que no ocurra). Se quema \
+visualmente en grande sobre el tramo de avance. Ejemplos de tono: "NO TE \
+VAS A CREER ESTO", "ESTO SALIO MAL DE VERDAD", "NADIE SE LO ESPERABA", \
+"LO QUE DIJO DESPUES ES INCREIBLE". Distinto de hook_title (que es mas \
+descriptivo/para caption) — este es puramente para captar atencion visual.
+- description: 1-2 frases en tercera persona describiendo de forma neutra \
+y factual que ocurre en el clip. Sin opinion ni valoracion. Sirve para \
+generar titulos o captions despues sin tener que revisar el transcript.
+
+- hook_title: frase corta que funcione como "curiosity gap" real — que \
+genere una pregunta en la cabeza del espectador SIN responderla, y cuya \
+respuesta/payoff este dentro del propio clip. REGLAS: (1) Basalo en algo \
+que REALMENTE se dice o pasa en el clip (frase textual o parafrasis muy \
+cercana), no en una afirmacion generica sobre el tono. (2) No spoilear el \
+remate — si el titulo ya cuenta el final, no genera curiosidad. (3) \
+Prioriza frases que suenen "raras" o "fuera de lugar" leidas solas, \
+porque necesitan el contexto del clip para tener sentido — eso es lo que \
+engancha. (4) Si no hay ninguna frase que sirva como curiosity gap \
+genuino, baja el score en vez de forzar un titulo exagerado. \
+MAL: "Momento muy fuerte del video" / "Se cae y todos se rien" \
+BIEN: "Le dijo que no llevaba pantalones" (solo tiene sentido al ver el clip)
 
 Devuelve SOLO un array JSON, sin texto adicional antes ni despues, con \
 este esquema exacto:
-[{"start": segundos_float, "end": segundos_float, "hook_title": "titulo \
-corto y viral", "reason": "por que funciona en 1 linea", "score": 0-100}]
+[{"start": segundos_float, "end": segundos_float, "hook_title": "curiosity \
+gap corto basado en algo real del clip", "reason": "por que funciona en 1 \
+linea", "score": 0-100, "hook_start": segundos_float, "hook_end": \
+segundos_float, "hook_overlay_text": "TEXTO EN MAYUSCULAS MAX 8 PALABRAS", \
+"description": "1-2 frases neutras de que ocurre en el clip"}]
 """
 
 USER_PROMPT_TEMPLATE = """\
@@ -219,6 +254,29 @@ def shrink_moment_to_subsegment(
     }
 
 
+def _enforce_hook_timestamps(moments: list[dict]) -> list[dict]:
+    """Clampea hook_start/hook_end dentro del rango start-end del momento.
+
+    Si el modelo devuelve hook timestamps fuera del rango del clip, los ajusta
+    al limite correspondiente. Si el rango resultante es invalido (hook_end <=
+    hook_start), elimina los campos para que el pipeline salte el hook teaser
+    en ese momento en vez de fallar.
+    """
+    result = []
+    for m in moments:
+        hook_start = m.get("hook_start")
+        hook_end = m.get("hook_end")
+        if hook_start is not None and hook_end is not None:
+            hook_start = max(float(m["start"]), float(hook_start))
+            hook_end = min(float(m["end"]), float(hook_end))
+            if hook_end > hook_start:
+                m = {**m, "hook_start": hook_start, "hook_end": hook_end}
+            else:
+                m = {k: v for k, v in m.items() if k not in ("hook_start", "hook_end")}
+        result.append(m)
+    return result
+
+
 def _enforce_duration(moments: list[dict]) -> list[dict]:
     """Descarta momentos mas cortos que el minimo y recorta los mas largos que el maximo."""
     validated = []
@@ -301,6 +359,15 @@ def find_moments(
 
     moments = _parse_moments(response_text)
     moments = _enforce_duration(moments)
+    moments = _enforce_hook_timestamps(moments)
+    for m in moments:
+        if m.get("hook_start") is not None:
+            clip_dur = m["end"] - m["start"]
+            if (float(m["hook_start"]) - float(m["start"])) < 2.0 and clip_dur > 15.0:
+                print(
+                    f"[AVISO] hook_start muy cerca del inicio del clip para "
+                    f"'{m.get('hook_title', '?')}' - revisa si el modelo eligio bien"
+                )
     moments = dedupe_highlights(moments)
     moments.sort(key=lambda m: m["start"])
 

@@ -122,9 +122,8 @@ def _escape_ass_text(text: str) -> str:
 
 def _build_ass_header(karaoke_font: str, karaoke_color_ass: str) -> str:
     """Header .ass parametrizado por campaña: fuente y color del estilo Karaoke
-    (el texto palabra-por-palabra). Title y Cliffhanger mantienen su estilo
-    fijo (dorado / blanco) en todas las campañas - solo el texto principal
-    de los subtitulos varia."""
+    (el texto palabra-por-palabra). Title, Cliffhanger y HookOverlay mantienen
+    su estilo fijo en todas las campañas - solo el texto karaoke varia."""
     return f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {VERTICAL_WIDTH}
@@ -137,6 +136,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: Karaoke,{karaoke_font},88,{karaoke_color_ass},&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,6,0,2,60,60,{CAPTION_MARGIN_V},1
 Style: Title,{FONT_NAME},72,&H0000D7FF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,6,0,8,60,60,140,1
 Style: Cliffhanger,{FONT_NAME},64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,3,0,0,5,80,80,0,1
+Style: HookOverlay,{FONT_NAME},108,&H0000FFFF,&H000000FF,&H00000000,&HAA000000,-1,0,0,0,100,100,2,0,1,7,3,8,80,80,80,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -151,6 +151,7 @@ def build_ass(
     cliffhanger_text: str | None = None,
     font_name: str = FONT_NAME,
     text_color: str = "white",
+    hook_overlay_text: str | None = None,
 ) -> str:
     """Arma el contenido de un archivo .ass para un clip de `duration` segundos.
 
@@ -163,10 +164,24 @@ def build_ass(
     `text_color` acepta un nombre conocido de KARAOKE_COLOR_ASS ("white",
     "yellow") o un hex ASS crudo (``&HAABBGGRR``) para colores nuevos sin
     tener que tocar este archivo.
+
+    `hook_overlay_text` (si se pasa) se muestra durante TODO el clip con el
+    estilo HookOverlay: fuente grande (~108px), negrita, amarillo con contorno
+    negro grueso, centrado en la parte superior del frame. Pensado para el
+    tramo de hook-teaser (texto corto en mayúsculas tipo "NO TE VAS A CREER
+    ESTO") — queda encima de los subtítulos karaoke que van abajo.
     """
     ass_color = KARAOKE_COLOR_ASS.get(text_color, text_color)
     header = _build_ass_header(font_name, ass_color)
     events: list[str] = []
+
+    if hook_overlay_text:
+        text = _escape_ass_text(hook_overlay_text)
+        if text:
+            events.append(
+                f"Dialogue: 2,{_ass_time(0)},{_ass_time(duration)},"
+                f"HookOverlay,,0,0,0,,{text}"
+            )
 
     cliffhanger_start = None
     if cliffhanger_text:

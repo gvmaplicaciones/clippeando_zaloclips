@@ -1,0 +1,134 @@
+[
+  {
+    "start": 0.0,
+    "end": 21.2,
+    "hook_title": "Jefe infiltrado en servidor Minecraft",
+    "reason": "Setup claro del experimento social - el creador se disfraza de jugador nuevo para probar la comunidad",
+    "score": 55,
+    "hook_start": 0.0,
+    "hook_end": 6.3,
+    "hook_overlay_text": "ME HAGO PASAR POR JUGADOR NUEVO",
+    "description": "El creador explica que se va a infiltrar en un servidor Minecraft con una cuenta nueva sin rango para probar cómo responde la comunidad ante un jugador principiante."
+  },
+  {
+    "start": 155.2,
+    "end": 222.4,
+    "hook_title": "La triste historia del jugador que perdió TODO en el casino",
+    "reason": "Narrativa potente de alguien revelando pérdida real de dinero en gambling. Progresión emocional: inicio (recomendación contra casinos) → desarrollo (historia de pérdida) → climax (casi 10 dólares reales). Dilema moral genuino sobre gambling en servidores.",
+    "score": 85,
+    "hook_start": 196.4,
+    "hook_end": 217.2,
+    "hook_overlay_text": "PERDIO 10 DOLARES REALES EN UN CASINO",
+    "description": "Un jugador experimentado en el casino le cuenta al creador cómo entró al servidor, perdió 80k de dinero ficticio jugando, luego compró dinero real por casi 10 dólares para intentar recuperarse y volvió a perder todo."
+  },
+  {
+    "start": 244.8,
+    "end": 275.7,
+    "hook_title": "Un extraño le regala 50k sin razón - y lo cambia TODO",
+    "reason": "Momento de giro emocional puro - alguien totalmente desconocido ve que va a robarle (sabía que 'eran ratas') y le regala protección 50x50 de todas formas. Payoff de bondad genuina. Además, el personaje es promovido a Zeus al momento.",
+    "score": 88,
+    "hook_start": 255.8,
+    "hook_end": 266.7,
+    "hook_overlay_text": "LE REGALO 50X50 SIN PEDIRLO",
+    "description": "Un jugador anónimo, consciente de que otros jugadores lo robarían, le regala una protección 50x50 al creador. Además, le menciona que uno de los administradores lo promueve a rango Zeus como recompensa por su bondad."
+  },
+  {
+    "start": 278.6,
+    "end": 318.1,
+    "hook_title": "Reveló su identidad y todos se sorprendieron",
+    "reason": "Reveal clásico - dice su verdadero nombre (Willy) después de haber estado grabando bajo cover. Reacción de sorpresa cuando se enteran de que fue un experimento social todo el tiempo.",
+    "score": 76,
+    "hook_start": 288.4,
+    "hook_end": 298.5,
+    "hook_overlay_text": "SOY WILLY, GRABABA UN VIDEO",
+    "description": "Después de interactuar con varios jugadores, el creador revela que es Willy y que toda la interacción fue parte de un video para ver quién lo ayudaba como jugador nuevo."
+  },
+  {
+    "start": 346.1,
+    "end": 380.0,
+    "hook_title": "Primer amigo en el servidor - y se burla de él",
+    "reason": "Momento cómico y social - alguien lo agrega como amigo, luego le pide un pico, y el otro rechaza diciendo 'vendo casas, no regalo picos'. Tensión social baja pero con humor.",
+    "score": 62,
+    "hook_start": 377.9,
+    "hook_end": 380.0,
+    "hook_overlay_text": "NO REGALO PICOS, VENDO CASAS",
+    "description": "El creador intenta pedir ayuda a su nuevo amigo pidiéndole un pico, pero el jugador rechaza tajantemente diciendo que vende casas, no regala herramientas."
+  },
+  {
+    "start": 412.1,
+    "end": 457.2,
+    "hook_title": "Un administrador lo elige - y le da RANGO",
+    "reason": "Payoff emocional fuerte - un jugador lo ayuda regalándole protección y dinero, revela que no tiene nada, y un admin lo promueve a rango Zeus. Transformación de zero a hero.",
+    "score": 80,
+    "hook_start": 421.0,
+    "hook_end": 435.5,
+    "hook_overlay_text": "LE REGALAN PROTECCION Y RANGO ZEUS",
+    "description": "Después de ayudar al creador de varias formas, incluyendo darle una protección 50x50 y zanahorias, los jugadores lo promueven a rango Zeus como recompensa por su bondad hacia los nuevos jugadores."
+  },
+  {
+    "start": 515.6,
+    "end": 561.1,
+    "hook_title": "El verdadero Jesucristo del servidor",
+    "reason": "Personaje memorable con recompensa emocional - 'Line call' le da un pico Hércules y pala sin pedirle nada, solo para ayudar. El creador lo llama 'Jesucristo' porque es demasiado bueno. Momento viral de altruismo extremo.",
+    "score": 87,
+    "hook_start": 557.5,
+    "hook_end": 561.1,
+    "hook_overlay_text": "ESTE TIPO ES JESUCRISTO",
+    "description": "Un jugador llamado Line call le ofrece trabajo al creador aplanando terrenos y le regala un pico Hércules y una pala sin cobrar nada a cambio. El creador lo llama 'Jesucristo' por su altruismo extremo."
+  },
+  {
+    "start": 627.1,
+    "end": 676.7,
+    "hook_title": "El sistema de trabajo: El infojobs de Minecraft",
+    "reason": "Observación social inteligente - nota cómo el servidor ha creado un sistema natural de trabajo/demanda. Gente buscando trabajo, gente ofreciendo paga. Reflexión sobre la economía del servidor.",
+    "score": 68,
+    "hook_start": 647.0,
+    "hook_end": 657.2,
+    "hook_overlay_text": "CREO QUE TENEMOS UN INFOJOBS",
+    "description": "El creador observa que en el chat hay jugadores ofreciendo trabajo para aplanar terrenos y otros buscando trabajo, creando un sistema económico natural similar a un portal de empleo."
+  },
+  {
+    "start": 1192.5,
+    "end": 1250.0,
+    "hook_title": "ROBO HISTÓRICO: Le roba 500k después de prometerle un millón",
+    "reason": "Giro narrativo brutal - promete dinero, recibe 500k para que le compre protección, dice que le va a dar 1M, lo estafa completamente. Es el momento de mayor tensión y traición. Payoff: el creador quiere banearlo.",
+    "score": 92,
+    "hook_start": 1217.8,
+    "hook_end": 1250.0,
+    "hook_overlay_text": "ME ROBO 500K DESPUES DE PROMETER",
+    "description": "Un jugador anónimo llamado 'hola caracola' promete darle dinero al creador a cambio de completar una tarea, pero lo estafa quedándose con los 500k. El creador descubre el robo horas después y expresa el deseo de banearlo."
+  },
+  {
+    "start": 1468.6,
+    "end": 1648.6,
+    "hook_title": "La caña perfecta - Timado pero feliz",
+    "reason": "Arco narrativo completo: gasta todo lo que tiene en una caña deficiente, la vende por nada, alguien lo ayuda comprándole una mejor caña de reparación. Ups y downs emocionales constantes.",
+    "score": 74,
+    "hook_start": 1500.6,
+    "hook_end": 1552.3,
+    "hook_overlay_text": "PAGUE POR UNA CAÑA HORRIBLE",
+    "description": "El creador gasta sus últimos 24k en una caña de mala calidad, se da cuenta del robo, pero luego alguien le vende una caña mejor reparada. A pesar de estar arruinado, consigue continuar."
+  },
+  {
+    "start": 1686.6,
+    "end": 1720.6,
+    "hook_title": "El ladrón fue BANEADO - Se adelantaron",
+    "reason": "Plot twist final - el creador encuentra al jugador que lo robó y descubre que ya había sido baneado hace 10 minutos por otros admins. Justicia poética sin necesidad de intervención propia.",
+    "score": 79,
+    "hook_start": 1712.6,
+    "hook_end": 1720.6,
+    "hook_overlay_text": "YA LO HABIAN BANEADO HACE 10 MINS",
+    "description": "El creador investiga al jugador 'hola caracola' que lo robó y descubre en el panel de admin que ya fue baneado por 20 días hace apenas 10 minutos, evitando que tenga que tomar acción."
+  },
+  {
+    "start": 1722.8,
+    "end": 1744.8,
+    "hook_title": "De nada a 2 millones - El experimento social completo",
+    "reason": "Conclusión reflexiva - resume el arco completo (cero → dueño + 2M) y lo compara con el CEO de McDonald's yendo de incógnito. Meta-reflexión sobre por qué fue importante hacer el experimento.",
+    "score": 71,
+    "hook_start": 1724.6,
+    "hook_end": 1738.5,
+    "hook_overlay_text": "DE NADA A DUEÑO Y 2 MILLONES",
+    "description": "El creador cierra el video reflexionando sobre cómo pasó de no tener nada a tener rango dueño y 2 millones, comparando el experimento social con un CEO de McDonald's realizando una inspección encubierta."
+  }
+]

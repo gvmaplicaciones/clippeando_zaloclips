@@ -8,6 +8,7 @@ relanzar la excepcion si algo falla.
 """
 from __future__ import annotations
 
+import json as _json
 import shlex
 import subprocess
 import sys
@@ -56,6 +57,8 @@ def run_command(args: list[str], progress_interval: float = 3.0) -> None:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         bufsize=1,
     )
 
@@ -134,6 +137,44 @@ def probe_duration(path: Path | str) -> float | None:
         return float(result.stdout.strip())
     except ValueError:
         return None
+
+
+def concat_clips(clip_a: Path | str, clip_b: Path | str, output: Path | str) -> None:
+    """Concatena clip_a + clip_b con el filtro concat de ffmpeg (no el demuxer).
+
+    Reencodea ambos al mismo formato antes de unir para evitar problemas de
+    compatibilidad de codec/timebase/resolución cuando los dos segmentos no
+    son exactamente idénticos (ej. duraciones distintas, keyframe gaps).
+    """
+    run_command([
+        "ffmpeg",
+        "-i", str(clip_a),
+        "-i", str(clip_b),
+        "-filter_complex", "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]",
+        "-map", "[outv]", "-map", "[outa]",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k",
+        "-y", str(output),
+    ])
+
+
+def verify_video_and_audio(path: Path | str) -> None:
+    """Lanza RuntimeError si el archivo no tiene pista de video Y audio (via ffprobe)."""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"ffprobe fallo en {path}: {exc}") from exc
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe retorno error en {path}")
+    types = {s["codec_type"] for s in _json.loads(result.stdout).get("streams", [])}
+    if "video" not in types:
+        raise RuntimeError(f"{path}: falta pista de video (streams: {types})")
+    if "audio" not in types:
+        raise RuntimeError(f"{path}: falta pista de audio (streams: {types})")
 
 
 def escape_filter_path(path: Path | str) -> str:

@@ -1,4 +1,4 @@
-"""Recorte a formato vertical 9:16 (crop centrado, sin face-tracking)."""
+"""Conversion a formato vertical 9:16 (crop centrado o blur-fill)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -78,4 +78,79 @@ def crop_to_vertical(
         stream = ffmpeg.output(video, str(output_path), **output_kwargs).overwrite_output()
     run_ffmpeg(stream)
 
+    return output_path
+
+
+def crop_to_vertical_blur_fill(
+    input_path: Path,
+    output_path: Path,
+    start: float | None = None,
+    duration: float | None = None,
+    width: int = VERTICAL_WIDTH,
+    height: int = VERTICAL_HEIGHT,
+    blur_sigma: int = 20,
+    darken: float = -0.06,
+) -> Path:
+    """Convierte a 9:16 sin recortar el video: fondo difuminado + video entero centrado.
+
+    Genera dos capas desde el mismo input via split:
+    - Fondo: video escalado para CUBRIR width x height (force_original_aspect_ratio=increase
+      + crop), desenfocado con gblur y ligeramente oscurecido con eq.
+    - Primer plano: video entero escalado para CABER en width x height
+      (force_original_aspect_ratio=decrease), centrado verticalmente sobre el fondo.
+
+    El audio se mapea explicitamente igual que en crop_to_vertical() para
+    evitar el bug conocido donde el audio queda fuera del -map implicito
+    cuando hay un filter_complex activo.
+    """
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    input_kwargs = {"ss": start} if start is not None else {}
+    output_kwargs = {
+        "c:v": "libx264",
+        "preset": "veryfast",
+        "crf": 20,
+        "pix_fmt": "yuv420p",
+        "c:a": "aac",
+        "b:a": "128k",
+    }
+    if duration is not None:
+        output_kwargs["t"] = duration
+
+    input_stream = ffmpeg.input(str(input_path), **input_kwargs)
+
+    # split genera dos referencias independientes al mismo stream de video para
+    # poder alimentar dos cadenas de filtros distintas (fondo y primer plano)
+    # sin que ffmpeg se queje de que el mismo stream se consume dos veces.
+    split = input_stream.video.filter_multi_output("split")
+    bg_in = split[0]
+    fg_in = split[1]
+
+    bg = (
+        bg_in
+        .filter("scale", width, height, force_original_aspect_ratio="increase")
+        .filter("crop", width, height)
+        .filter("gblur", sigma=blur_sigma)
+        .filter("eq", brightness=darken)
+    )
+
+    # scale con force_original_aspect_ratio=decrease: el video cabe entero
+    # dentro de width x height sin que ninguna dimension lo supere.
+    fg = fg_in.filter("scale", width, height, force_original_aspect_ratio="decrease")
+
+    out_video = (
+        ffmpeg.filter([bg, fg], "overlay", x="(W-w)/2", y="(H-h)/2")
+        .filter("setsar", 1)
+    )
+
+    if has_audio_stream(input_path):
+        stream = ffmpeg.output(out_video, input_stream.audio, str(output_path), **output_kwargs).overwrite_output()
+    else:
+        output_kwargs.pop("c:a", None)
+        output_kwargs.pop("b:a", None)
+        stream = ffmpeg.output(out_video, str(output_path), **output_kwargs).overwrite_output()
+
+    run_ffmpeg(stream)
     return output_path

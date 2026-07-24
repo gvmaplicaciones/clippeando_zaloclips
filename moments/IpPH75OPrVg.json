@@ -1,0 +1,220 @@
+[
+  {
+    "start": 0.0,
+    "end": 21.0,
+    "hook_title": "Le dijo que no me quieres, Che",
+    "reason": "Hook de humor basado en una frase real que suena absurda sin contexto (está hablando a un tren de sushi), genera curiosidad inmediata.",
+    "score": 62,
+    "hook_start": 2.7,
+    "hook_end": 5.4,
+    "hook_overlay_text": "¿POR QUE NO ME QUIERES, CHE?",
+    "description": "Luisillo intenta que un tren de sushi llegue a su mesa. Varios trenecitos pasan sin ir a su mesa mientras él se queja de forma cómica sobre por qué el tren no lo quiere."
+  },
+  {
+    "start": 31.7,
+    "end": 111.3,
+    "hook_title": "Probamos sushi de 1 dólar en Japón",
+    "reason": "Hook de curiosidad clara sobre el precio barato del sushi auténtico, típico de viaje/aventura. Establece la premisa central del video.",
+    "score": 58,
+    "hook_start": 39.0,
+    "hook_end": 42.4,
+    "hook_overlay_text": "SUSHI MUY BARATO EN JAPON",
+    "description": "Introducción al concepto del video: probar sushi económico en Japón (5-15 dólares) vs sushi gourmet. Explica el sistema de kaiten sushi y la variedad de ofertas."
+  },
+  {
+    "start": 113.8,
+    "end": 293.8,
+    "hook_title": "Este lugar te sirves tú solito tu propia soya",
+    "reason": "Momento instructivo-visual que muestra un sistema único (kaiten sushi). La diferencia con otros lugares genera interés real sobre cómo funciona.",
+    "score": 54,
+    "hook_start": 177.7,
+    "hook_end": 180.6,
+    "hook_overlay_text": "TE SIRVES TU SOYA SOLITO AQUI",
+    "description": "Visita a Oedo Sushi. Explica cómo funciona el kaiten sushi: sistema de platos por color con precios diferentes, preparación ante los ojos, menú incluido y wasabi en la banda."
+  },
+  {
+    "start": 309.4,
+    "end": 335.0,
+    "hook_title": "Sardina bebé cruda con sus ojitos",
+    "reason": "Descripción visual perturbadora pero factual que genera reacción (está raro pero es comible). Eso es lo que engancha: lo inusual.",
+    "score": 66,
+    "hook_start": 312.3,
+    "hook_end": 314.4,
+    "hook_overlay_text": "SARDINA BEBE CRUDA CON OJITOS",
+    "description": "Prueba el Namashira-su (sardina bebé cruda). Describe lo raro de la apariencia pero comenta que sabe bien. Menciona que es uno de los platos más baratos del menú."
+  },
+  {
+    "start": 453.6,
+    "end": 548.0,
+    "hook_title": "Por cada 5 platos jugas un gachapón y ganas juguetes",
+    "reason": "Novedad del concepto: sistema de gamificación que es real y atractivo. Genera preguntas sobre qué se puede ganar.",
+    "score": 65,
+    "hook_start": 524.4,
+    "hook_end": 536.2,
+    "hook_overlay_text": "GACHAPON: POR 5 PLATOS GANAS UN JUGUETE",
+    "description": "Visita a Kura Sushi. Explica el concepto de cadena masiva con 500+ sucursales. Sistema único: cada 5 platos vacíos = juego de gachapón para ganar juguetes."
+  },
+  {
+    "start": 630.0,
+    "end": 695.0,
+    "hook_title": "El robot trae tu cerveza con platito para que no se derrame",
+    "reason": "Detalle absurdo pero real que genera humor: cómo los japoneses lo piensan todo. Imagen mental clara.",
+    "score": 68,
+    "hook_overlay_text": "ROBOT TRAE CERVEZA CON PLATITO",
+    "description": "Muestra cómo funciona Kura Sushi: interacción mínima con humanos, todo por robots y pantallitas. Pide cerveza por tablet, llega en bandeja para evitar derrames."
+  },
+  {
+    "start": 865.6,
+    "end": 920.0,
+    "hook_title": "Comimos 5 platos y ganamos... nada",
+    "reason": "Remate cómico y frustración real: la máquina de juego nunca da nada. Payoff de expectativa vs realidad.",
+    "score": 72,
+    "hook_start": 872.8,
+    "hook_end": 889.9,
+    "hook_overlay_text": "COMIMOS 5 PLATOS Y NO GANAMOS NADA",
+    "description": "Luisillo accumula 5 platos sucios y participa en un juego de gachapón. La máquina muestra animación pero sin premio. Comenta que es cómo se hacen ricos: vendiendo el sueño."
+  },
+  {
+    "start": 920.0,
+    "end": 975.7,
+    "hook_title": "Pastel de cumpleaños llega por la banda con musiquita de navidad",
+    "reason": "Momento visual-auditivo único: desfile público del postre con pieza de teatro. Genera emoción y curiosidad sobre por qué esto.",
+    "score": 74,
+    "hook_start": 948.4,
+    "hook_end": 958.7,
+    "hook_overlay_text": "PASTEL LLEGA CON MUSICA Y TODO EL RESTAURANTE LO VE",
+    "description": "Un pastel de cumpleaños pasa por la banda lenta con música especial para que todo el restaurante se entere. Muestra la gamificación social del lugar."
+  },
+  {
+    "start": 1015.8,
+    "end": 1090.0,
+    "hook_title": "Ganamos al tercer intento pero el premio vale 20 centavos",
+    "reason": "Payoff cómico: después de esfuerzo, el premio es worthless. Crítica real del modelo de negocio.",
+    "score": 76,
+    "hook_start": 1015.8,
+    "hook_end": 1032.3,
+    "hook_overlay_text": "GANAMOS PERO EL PREMIO VALE 20 CENTAVOS",
+    "description": "Después de acumular 15 platos, finalmente gana el gachapón. El premio es un alfiler de anime barato. Luisillo comenta sarcásticamente sobre la trampa del negocio."
+  },
+  {
+    "start": 1280.0,
+    "end": 1355.2,
+    "hook_title": "26 dólares por dos personas en un restaurante de cadena masiva",
+    "reason": "Hook de precio justo (es viaje/aventura). Cierra la experiencia Kura Sushi con dato cuantificable que genera perspectiva.",
+    "score": 61,
+    "hook_start": 1285.3,
+    "hook_end": 1302.7,
+    "hook_overlay_text": "26 DOLARES POR DOS EN CADENA MASIVA",
+    "description": "Cuenta final en Kura Sushi: 4,260 yenes (~26 USD). Incluye dos personas, bebidas alcohólicas y postre de cumpleaños. Evalúa si vale esperar horas: no, mejor ir entre semana."
+  },
+  {
+    "start": 1391.9,
+    "end": 1440.2,
+    "hook_title": "Tu orden llega en trenecitos de alta velocidad",
+    "reason": "Hook visual-narrativo del concepto Uobei. 'Trenecitos' es palabra clave que genera imagen clara y es buscable.",
+    "score": 64,
+    "hook_start": 1405.6,
+    "hook_end": 1409.0,
+    "hook_overlay_text": "TUS ORDENES LLEGAN EN TRENECITOS",
+    "description": "Visita a Uobei Sushi. Presenta el concepto de entregas en trenes de juguete de alta velocidad. Menciona que desde la ventana ves trenes de verdad pasar mientras comes."
+  },
+  {
+    "start": 1464.3,
+    "end": 1502.9,
+    "hook_title": "Cangrejo con concha suave: lo comes enterito",
+    "reason": "Detalle raro pero comestible que genera curiosidad. Además hay 'trasfondo perturbador' que menciona luego.",
+    "score": 67,
+    "hook_start": 1466.8,
+    "hook_end": 1473.0,
+    "hook_overlay_text": "CANGREJO ENTERO CON CONCHA SUAVE",
+    "description": "Prueba cangrejo de concha suave (800 yenes). Explica que se come completamente. Menciona el dato perturbador: matan el cangrejo justo cuando cambia de caparazón."
+  },
+  {
+    "start": 1670.0,
+    "end": 1785.0,
+    "hook_title": "Lleva 7 platos sin que el chef le mande el tren",
+    "reason": "Narrativa de frustración cómica real: Luisillo obsesionado con no recibir tren mientras otros sí. Genera empatía cómica.",
+    "score": 78,
+    "hook_start": 1670.9,
+    "hook_end": 1675.2,
+    "hook_overlay_text": "YO QUIERO MAS TRENES, ¿POR QUE NO ME QUIERES?",
+    "description": "Secuencia larga: Luisillo pide múltiples platos (cangrejo, pato, salmón) esperando recibir el sushi en tren. El chef envía trenes a otros clientes pero no a él. Generador de frustración cómica progresiva."
+  },
+  {
+    "start": 1753.5,
+    "end": 1800.4,
+    "hook_title": "El trencito llegó... pero era jengibre de 20 yenes",
+    "reason": "Remate de frustración: finalmente llega el tren pero con lo más barato (jengibre). Payoff perfecto de setup.",
+    "score": 82,
+    "hook_start": 1770.8,
+    "hook_end": 1779.9,
+    "hook_overlay_text": "EL TREN LLEGO PERO ERA SOLO JENGIBRE",
+    "description": "Después de múltiples intentos fallidos, finalmente recibe un tren... pero trae jengibre de 20 yenes, no un platillo caro. Ironía: gastó >$5 en sushi para ganar un tren de jengibre gratis."
+  },
+  {
+    "start": 1895.6,
+    "end": 1960.5,
+    "hook_title": "Sushi en 7-Eleven: lo armas tú mismo en la tienda",
+    "reason": "Concepto único: venta de sushi pre-enrollado sin hacer donde lo terminas de armar. Novedad real.",
+    "score": 59,
+    "hook_start": 1909.1,
+    "hook_end": 1922.9,
+    "hook_overlay_text": "SUSHI QUE TU MISMO ARMAS EN 7-ELEVEN",
+    "description": "Compra sushi en tienda de conveniencia (250 yenes). El concepto es especial: llega con ingredientes separados y tú lo enrollas para mantenerlo fresco."
+  },
+  {
+    "start": 2041.0,
+    "end": 2080.4,
+    "hook_title": "Viajamos una hora para un lugar que ya no tiene trenes",
+    "reason": "Twist de frustración real: esfuerzo viajero fue inútil. Genera simpatía por el streamer.",
+    "score": 71,
+    "hook_start": 2044.4,
+    "hook_end": 2073.2,
+    "hook_overlay_text": "VIAJAMOS 1 HORA Y LOS TRENES FUERON QUITADOS",
+    "description": "Luisillo viajó desde Takamatsu a Kurashiki (>1 hora) para grabar Kappa Sushi que supuestamente tenía trenes. Llega y le dicen que los quitaron en todas las sucursales nuevas."
+  },
+  {
+    "start": 2197.7,
+    "end": 2250.0,
+    "hook_title": "El menú de niños incluye moneda para jugar máquinas",
+    "reason": "Detalle cool del menú infantil: genera perspectiva de valor y experiencia familiar.",
+    "score": 56,
+    "hook_start": 2210.7,
+    "hook_end": 2221.5,
+    "hook_overlay_text": "MENU NIÑOS INCLUYE MONEDA PARA JUGAR",
+    "description": "Prueba el menú infantil de Kappa Sushi. Incluye 3 piezas de sushi, carne katsu, papas, postre y una moneda para máquina tragamonedas."
+  },
+  {
+    "start": 2285.6,
+    "end": 2319.2,
+    "hook_title": "Calamarcito bebé: se ve horrible pero sabe bien",
+    "reason": "Contraste visual-sabor real. Frase textual que genera curiosidad sobre cómo puede algo tan feo saber bien.",
+    "score": 69,
+    "hook_start": 2285.6,
+    "hook_end": 2296.2,
+    "hook_overlay_text": "SE VE HORRIBLE PERO SABE BIEN",
+    "description": "Prueba sushi de calamarcito bebé entero. Comenta que visualmente es desagradable pero el sabor es mejor de lo esperado. Describe la textura gelatinosa."
+  },
+  {
+    "start": 2322.5,
+    "end": 2380.0,
+    "hook_title": "15 dólares por dos personas incluyendo bebidas y postre",
+    "reason": "Hook de precio final que cierra la experiencia Kappa Sushi. Dato comparable a Kura para generar perspectiva.",
+    "score": 60,
+    "hook_start": 2369.5,
+    "hook_end": 2376.2,
+    "hook_overlay_text": "TODO POR 15 DOLARES PARA DOS",
+    "description": "Resumen final de Kappa Sushi: 2,400 yenes (~15 USD) por dos personas, múltiples platos, bebidas y postre incluido. Evalúa positivamente el precio y la experiencia."
+  },
+  {
+    "start": 2384.4,
+    "end": 2410.4,
+    "hook_title": "La máquina de garra siempre tiene maña",
+    "reason": "Observación universal cómica: las máquinas de garra están diseñadas para que nunca ganes. Genera risa empática.",
+    "score": 63,
+    "hook_start": 2398.8,
+    "hook_end": 2403.2,
+    "hook_overlay_text": "LA MAQUINA DE GARRA SIEMPRE ENGAÑA",
+    "description": "Intenta ganar un juguete en la máquina de garra con la moneda del menú infantil. Falla como siempre. Comenta sobre cómo estas máquinas están diseñadas para no funcionar."
+  }
+]

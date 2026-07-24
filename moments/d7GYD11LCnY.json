@@ -1,0 +1,100 @@
+[
+  {
+    "start": 4.5,
+    "end": 44.1,
+    "hook_title": "200 jugadores construyen una ciudad futurista en 1 hora",
+    "reason": "Hook de anticipación inmediato: presenta el experimento social con escala masiva y reto temporal, genera curiosidad sobre el resultado",
+    "score": 75
+  },
+  {
+    "start": 289.3,
+    "end": 330.2,
+    "hook_title": "En 10 minutos ya hay un edificio completamente construido",
+    "reason": "Impacto visual + dato sorprendente: velocidad de construcción inesperada, genera admiración por la coordinación",
+    "score": 65
+  },
+  {
+    "start": 342.3,
+    "end": 365.0,
+    "hook_title": "Un coche cohete futurista pero Dragonji sigue haciendo 'cochinadas'",
+    "reason": "Contraste: construcciones increíbles vs. jugadores que siguen sin contribuir, humor de frustración del host",
+    "score": 66
+  },
+  {
+    "start": 425.2,
+    "end": 450.1,
+    "hook_title": "Spleby de mi clan construyó una torre ALTÍSIMA sin razón (el host lo ve en espectador)",
+    "reason": "Tensión social: el host observa en secreto y comenta con frustración, humor de estar 'espiando' al jugador",
+    "score": 67
+  },
+  {
+    "start": 507.9,
+    "end": 536.9,
+    "hook_title": "Quedan 42 minutos y esto ni es un 10% de la ciudad (van a fracasar)",
+    "reason": "Giro narrativo: predicción pesimista del host sobre el éxito, crea tensión sobre si lo lograrán",
+    "score": 68
+  },
+  {
+    "start": 696.2,
+    "end": 730.6,
+    "hook_title": "Un jugador dice 'Vegeta fake' porque el host le ayudó (meta moment)",
+    "reason": "Interacción cómica: meta-humor sobre el host interfiriendo, referencia interna de la comunidad, momento espontáneo",
+    "score": 62
+  },
+  {
+    "start": 803.7,
+    "end": 827.6,
+    "hook_title": "Ya no vais a acabar, os lo adelanto (predicción pesimista)",
+    "reason": "Tensión narrativa: el host predice el fracaso 12 minutos antes del final, crea suspense sobre si tiene razón",
+    "score": 69
+  },
+  {
+    "start": 880.0,
+    "end": 911.7,
+    "hook_title": "Esto se hizo en MENOS DE UNA HORA (la coordinación es INCREÍBLE)",
+    "reason": "Momento de admiración genuina: reflexión sobre lo logrado, cambio de tono a asombro positivo, payoff emocional",
+    "score": 71
+  },
+  {
+    "start": 1028.5,
+    "end": 1072.2,
+    "hook_title": "Este edificio no tiene ni pie ni cabeza (voy a acordarme de ti)",
+    "reason": "Momento de crítica constructiva cómica: el host identifica una falla clara y promete venganza bromista",
+    "score": 66
+  },
+  {
+    "start": 1094.3,
+    "end": 1127.0,
+    "hook_title": "¡Cuidado! No os flipéis, UNA HORA no da tiempo para tanto",
+    "reason": "Consejo genuino pero cómico: el host regaña a todos por excederse, reflexión sobre los límites de tiempo",
+    "score": 65
+  },
+  {
+    "start": 1215.3,
+    "end": 1253.1,
+    "hook_title": "El edificio del 7 está LOCUROTE (dijeron que no iban a acabar pero LO HICIERON)",
+    "reason": "Payoff emocional: la predicción pesimista se revierte, admiración genuina por el resultado final",
+    "score": 77
+  },
+  {
+    "start": 1283.2,
+    "end": 1310.3,
+    "hook_title": "¿Una PALOMA volando sobre la ciudad futurista? ¿EN SERIO?",
+    "reason": "Absurdidad final: elemento completamente fuera de tema pero hecho de forma hermosa, humor de lo inesperado",
+    "score": 70
+  },
+  {
+    "start": 1407.1,
+    "end": 1432.0,
+    "hook_title": "Admins, alguien destruyó las construcciones (pido que lo baneen un mes)",
+    "reason": "Incidente real: acto de sabotaje en vivo, reacción genuina del host pidiendo justicia, genera tensión social",
+    "score": 71
+  },
+  {
+    "start": 1439.4,
+    "end": 1490.4,
+    "hook_title": "CHAPÓ por vosotros (reflexión final sobre lo logrado en una hora)",
+    "reason": "Cierre emocional genuino: admiración a toda la comunidad, momento de catarsis después del viaje",
+    "score": 72
+  }
+]

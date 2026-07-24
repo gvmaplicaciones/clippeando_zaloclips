@@ -10,12 +10,16 @@ clips ya generados.
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
-from src.clip import cut_clips
+from src.clip import HOOK_VERTICAL_MODES, VERTICAL_MODES, cut_clips
+from src.config import OUTPUT_DIR
 from src.content_types import get_content_type_prompt, list_content_types
 from src.detect_moments import detect_moments
-from src.download import ingest
+from src.download import download_vod, get_video_title, ingest
+from src.naming import sanitize_filename
+from src.report import generate_report
 from src.transcribe import transcribe_video
 from src.video_filters import list_video_filters, resolve_video_filter
 
@@ -27,6 +31,9 @@ def run_pipeline(
     max_clips: int | None = None,
     video_filter: str | None = None,
     content_type: str | None = None,
+    vertical_mode: str = "crop",
+    hook_teaser: bool = True,
+    hook_vertical_mode: str = "same",
 ) -> list[Path]:
     """Corre el pipeline completo a partir de una URL o un archivo local.
 
@@ -66,6 +73,9 @@ def run_pipeline(
         video_title_override=video_title_override,
         max_clips=max_clips,
         video_filter=video_filter,
+        vertical_mode=vertical_mode,
+        hook_teaser=hook_teaser,
+        hook_vertical_mode=hook_vertical_mode,
     )
 
     parts = sum(1 for p in clip_paths if " PARTE " in p.stem)
@@ -118,6 +128,38 @@ def main() -> None:
         action="store_true",
         help="Lista los tipos de contenido disponibles (prompts/*.txt) y termina, sin correr el pipeline.",
     )
+    parser.add_argument(
+        "--download-only",
+        action="store_true",
+        help="Solo descarga el video a input/ y termina. Sin transcripcion, sin clips.",
+    )
+    parser.add_argument(
+        "--report-only",
+        action="store_true",
+        help="Flujo simplificado: descarga, transcribe, detecta momentos y genera report.md "
+        "con timestamps para edicion manual. No corta ni procesa ningun clip.",
+    )
+    parser.add_argument(
+        "--vertical-mode",
+        choices=VERTICAL_MODES,
+        default="crop",
+        help="Modo de conversion a vertical: 'crop' (recorte centrado, por defecto) o "
+        "'blur_fill' (video entero sobre fondo difuminado, sin perder contenido de los bordes).",
+    )
+    parser.add_argument(
+        "--hook-teaser",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Antepone un avance de 2-4s con la frase mas impactante del clip (default: activado). "
+        "Usa --no-hook-teaser para desactivar.",
+    )
+    parser.add_argument(
+        "--hook-vertical-mode",
+        choices=HOOK_VERTICAL_MODES,
+        default="same",
+        help="Modo vertical del hook-teaser: 'same' (default, mismo que --vertical-mode), "
+        "'crop' (pantalla completa recortada), 'blur_fill' (fondo difuminado).",
+    )
     args = parser.parse_args()
 
     if args.list_filters:
@@ -131,14 +173,40 @@ def main() -> None:
         parser.error("--url o --file son requeridos (salvo con --list-filters/--list-content-types)")
 
     try:
-        run_pipeline(
-            url=args.url,
-            file=args.file,
-            video_title_override=args.video_title,
-            max_clips=args.max_clips,
-            video_filter=args.video_filter,
-            content_type=args.content_type,
-        )
+        if args.download_only:
+            if not args.url:
+                parser.error("--download-only requiere --url")
+            video_path = download_vod(args.url)
+            title = sanitize_filename(args.video_title or get_video_title(video_path))
+            target_dir = OUTPUT_DIR / title
+            target_dir.mkdir(parents=True, exist_ok=True)
+            dest = target_dir / video_path.name
+            if not dest.exists():
+                print(f"Copiando video a {dest} ...")
+                shutil.copy2(video_path, dest)
+            else:
+                print(f"Video ya existe en destino: {dest}")
+            print(f"Video descargado: {video_path}")
+            return
+        if args.report_only:
+            generate_report(
+                url=args.url,
+                file=args.file,
+                video_title_override=args.video_title,
+                content_type=args.content_type,
+            )
+        else:
+            run_pipeline(
+                url=args.url,
+                file=args.file,
+                video_title_override=args.video_title,
+                max_clips=args.max_clips,
+                video_filter=args.video_filter,
+                content_type=args.content_type,
+                vertical_mode=args.vertical_mode,
+                hook_teaser=args.hook_teaser,
+                hook_vertical_mode=args.hook_vertical_mode,
+            )
     except ValueError as e:
         parser.error(str(e))
 

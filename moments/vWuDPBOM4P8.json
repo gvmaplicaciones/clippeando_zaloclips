@@ -1,0 +1,57 @@
+[
+  {
+    "start": 83.0,
+    "end": 106.0,
+    "hook_title": "Este video tiene un tiempo porque LitKilla no quería que vieran sus formas",
+    "reason": "Revelación sobre por qué se demoró el video: razones estratégicas de espionaje en boxeo, genera curiosidad sobre qué pasó en el sparring",
+    "score": 71,
+    "hook_start": 91.3,
+    "hook_end": 101.0,
+    "hook_overlay_text": "NO QUERIA QUE VIERAN SUS TECNICAS",
+    "description": "Grefg revela que el video se tardó en subir porque LitKilla no quería que se vieran sus movimientos de boxeo en el sparring para no darle información a su rival KitKeo."
+  },
+  {
+    "start": 259.6,
+    "end": 294.3,
+    "hook_title": "He empezado a fumar e inyectarme para igualar el entrenamiento",
+    "reason": "Afirmacion absurda y contradictoria que genera risa: dice que se inyecta y fuma PARA no tener ventaja sobre su rival, humor involuntario muy potente",
+    "score": 75,
+    "hook_start": 261.2,
+    "hook_end": 266.3,
+    "hook_overlay_text": "ESTOY FUMANDO E INYECTANDOME PARA IGUALAR",
+    "description": "LitKilla bromeando (o no) dice que ha empezado a fumar e inyectarse para no llevar demasiada ventaja sobre KitKeo en el entrenamiento, para equilibrar la preparación."
+  },
+  {
+    "start": 1109.8,
+    "end": 1140.2,
+    "hook_title": "Me sorprendió mucho tu nivel para llevar 3 meses",
+    "reason": "Halago de experto después del sparring, pero funciona como validacion: Grefg reconoce nivel superior de LitKilla a pesar de su corto tiempo",
+    "score": 65,
+    "hook_start": 1136.9,
+    "hook_end": 1140.2,
+    "hook_overlay_text": "TU NIVEL ME SORPRENDIO PARA 3 MESES",
+    "description": "Después del sparring, Grefg comenta que LitKilla lo sorprendió gratamente con su nivel técnico y físico, considerando que lleva solo 3 meses y medio de preparación."
+  },
+  {
+    "start": 1181.3,
+    "end": 1205.5,
+    "hook_title": "Para llevar el tiempo que llevas, tenías sentido de la oportunidad",
+    "reason": "El entrenador analiza con detalle la picardía y vision tactil de LitKilla, valida su potencial innato en boxeo, tension progresiva en elogio tecnico",
+    "score": 73,
+    "hook_start": 1181.3,
+    "hook_end": 1199.5,
+    "hook_overlay_text": "TIENES EL SENTIDO DE OPORTUNIDAD INNATO",
+    "description": "Los entrenadores César y Nico analizan que LitKilla posee 'sentido de la oportunidad' innato en boxeo, algo que se tiene o no se tiene, y que para el tiempo que lleva entrenando es excepcional."
+  },
+  {
+    "start": 1318.3,
+    "end": 1368.3,
+    "hook_title": "Voy a inaugurar mis crocs de la velada con un pin que te represente",
+    "reason": "Ritmo de cierre emocional con gesto sincero y colaborativo, genera momento bonito que funciona como payoff del encuentro",
+    "score": 60,
+    "hook_start": 1318.3,
+    "hook_end": 1334.1,
+    "hook_overlay_text": "VOY A INAUGURAR CROCS DE LA VELADA",
+    "description": "Grefg propone hacer crocs personalizadas para la velada, invitando a LitKilla a elegir un pin que lo represente como primer colaborador en este proyecto."
+  }
+]
